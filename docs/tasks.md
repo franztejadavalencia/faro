@@ -10,7 +10,7 @@ Niveles de `spec.md`: P = versión preliminar, P+ = deseable en la preliminar, C
         manejo de errores, auth, **módulo contable**: entidades `cuenta`, `asiento`,
         `asiento_detalle` con `producto_id` auxiliar, servicio que genera el asiento dentro
         de la misma transacción que el documento, historial de régimen) · aprobado por mí
-- [ ] A4 · Revisar `docs/base-desde-siap.md` leyendo el código real de SIAP y corregir el
+- [x] A4 · Revisar `docs/base-desde-siap.md` leyendo el código real de SIAP y corregir el
         inventario (dependencias ocultas) · lista final
 - [ ] A5 · Desglosar Fase 1 y Fase 2 en tareas pequeñas en este archivo. Resolver antes, en
         `docs/revisiones/A5.md`:

@@ -61,6 +61,15 @@ selección de "rol operativo"** como en SIAP; si alguna vez hace falta, será un
 
 - **Negocio (tenant)**: comercio registrado en FARO. Todo dato comercial pertenece a un negocio.
 - **Sucursal**: punto físico del negocio. Cada negocio tiene al menos una (la principal).
+- **Persona**: ficha única de una persona natural o jurídica dentro de un negocio (nombre o razón
+  social, documento, contacto). La misma persona puede ser empleado con usuario y proveedor (y
+  cliente en la versión completa) sin repetir sus datos. Un negocio no ve las personas de otro.
+- **Usuario**: cuenta de acceso de una persona. Su identificador de login es único en toda la
+  plataforma, y el negocio sale del usuario.
+- **Proveedor**: persona a la que el negocio le compra mercadería; guarda solo sus datos
+  comerciales.
+- **Bitácora**: registro, de solo inserción, de las acciones sensibles (quién, cuándo, desde
+  dónde y qué hizo).
 - **Línea**: categoría de productos que define el dueño (p. ej. "Bebidas"). Un solo nivel.
 - **Producto**: artículo que se compra y se revende. Pertenece a una línea.
 - **Régimen tributario**: *General* (factura todas sus ventas; IVA e IT) o *Simplificado* (no
@@ -104,9 +113,14 @@ de §6; **C** = versión completa.
 ### 4.2 Seguridad (base SIAP)
 | Caso de uso | Nivel |
 |---|---|
-| Login con JWT, cambio de contraseña, cierre de sesión | P |
-| Dueño crea, edita y desactiva empleados y les asigna rol y sucursal | P |
-| Menú y acceso según los permisos del rol | P |
+| Login con JWT, cambio de contraseña, cierre de sesión (en todas las pestañas) | P |
+| Dueño crea, edita y desactiva empleados y les asigna rol y sucursal. Al crear un empleado busca su persona (por documento o nombre) o la crea en el mismo formulario, y le pone un usuario y una clave temporal | P |
+| Cambio de contraseña obligatorio en el primer ingreso y después de cada restablecimiento | P |
+| Restablecer la contraseña: el dueño la de sus empleados y el admin de plataforma la del dueño (sin recuperación por correo) | P |
+| Menú y acceso según los permisos del rol. El rol Dueño tiene todos los permisos y no se puede editar; el dueño edita los permisos de Empleado y de los roles que cree, en una matriz de módulos × opciones | P |
+| Sin el permiso "ver costos", el usuario no recibe costos, márgenes ni el valor del inventario | P |
+| Bitácora de acciones sensibles: login correcto y fallido, cambio y restablecimiento de clave, cambio de permisos, anulaciones, cierre y reapertura de mes, cambio de régimen | P |
+| Autenticación en 2 pasos (TOTP, con app como Google Authenticator): obligatoria para el admin de plataforma, opcional para el dueño | P |
 | Selección de rol operativo (si se necesitara) | C |
 
 ### 4.3 Configuración del negocio
@@ -124,7 +138,7 @@ de §6; **C** = versión completa.
 |---|---|
 | CRUD de líneas | P |
 | CRUD de productos: código, nombre, línea, unidad, precio de venta, stock mínimo | P |
-| CRUD de proveedores (datos básicos) | P |
+| CRUD de proveedores sobre `persona`: se busca la persona (por documento o nombre) o se crea en el mismo formulario; el proveedor guarda solo sus datos comerciales | P |
 
 ### 4.5 Compras e inventario
 | Caso de uso | Nivel |

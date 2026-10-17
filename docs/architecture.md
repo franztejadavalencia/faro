@@ -35,6 +35,7 @@ Se fijan **exactas**, sin `^` ni `~`, con `save-exact=true` en el `.npmrc` de ca
 | reflect-metadata | 0.2.2 |
 | dotenv | 16.4.5 (declarada como dependencia directa; en SIAP llega transitiva) |
 | decimal.js | nueva en FARO: última estable al instalarla en B1, fijada exacta y anotada aquí |
+| otplib / qrcode | nuevas en FARO, a evaluar al implementar la 2FA (P, decisión 50); versión exacta aquí al instalarlas |
 | typescript | 5.6.3 |
 | jest / supertest | 29.7.0 / 7.0.0 |
 | eslint / prettier | 8.57.1 / 3.5.3 |
@@ -44,6 +45,7 @@ Se fijan **exactas**, sin `^` ni `~`, con `save-exact=true` en el `.npmrc` de ca
 |---|---|
 | @angular/core (y el resto de `@angular/*` del framework) | 20.2.3 |
 | @angular/material, @angular/cdk, @angular/cli, @angular/build | 20.2.1 |
+| @angular/material-date-fns-adapter | 20.2.1 (nueva en FARO: `DateFnsAdapter` con locale `es` en lugar del `MomentDateAdapter` de SIAP; A4) |
 | typescript | 5.8.3 |
 | rxjs / zone.js | 7.8.2 / 0.15.0 |
 | tailwindcss | 4.1.12 (+ `@tailwindcss/postcss` de la misma versión, nueva en FARO) |
@@ -252,13 +254,23 @@ erDiagram
     regimen_tributario ||--o{ negocio_regimen : ""
     negocio ||--o{ periodo : ""
     negocio ||--o{ correlativo : ""
+    negocio ||--o{ persona : ""
+    persona ||--o| usuario : ""
     negocio ||--o{ usuario : ""
+    negocio ||--o{ rol_usuario : ""
+    rol_usuario ||--o{ usuario : ""
+    rol_usuario ||--o{ permiso_rol_usuario : ""
+    modulo_sistema ||--o{ permiso_rol_usuario : ""
+    opcion_modulo_sistema ||--o{ permiso_rol_usuario : ""
+    usuario ||--o{ usuario_codigo_respaldo : "2FA"
+    negocio ||--o{ bitacora : ""
     negocio ||--o{ cuenta : "plan de cuentas"
     cuenta ||--o{ cuenta : padre
 
     negocio ||--o{ linea : ""
     linea ||--o{ producto : ""
     negocio ||--o{ proveedor : ""
+    persona ||--o| proveedor : ""
     negocio ||--o{ categoria_gasto : ""
     cuenta ||--o{ categoria_gasto : "cuenta 5.2.1.xx"
 
@@ -321,6 +333,43 @@ erDiagram
 - `correlativo (id_negocio, tipo_documento, ultimo_numero)`: un correlativo **por tipo de
   documento y por negocio** (`COMPRA`, `VENTA`, `GASTO`, `AJUSTE_INVENTARIO`, `ASIENTO`)
   (decisión 37). Se toma con `pessimistic_write` dentro de la transacción del documento.
+
+### Seguridad (decisiones 43 a 51; base SIAP, `docs/base-desde-siap.md`)
+- `persona` (`BaseNegocioEntity`): ficha única por negocio, como `res.partner` de Odoo. Una
+  persona puede ser a la vez empleado con usuario y proveedor (y cliente en la versión
+  completa). La ficha de un negocio no la ve otro, aunque sea la misma persona real. Las
+  personas de los usuarios de plataforma tienen `id_negocio = null`.
+  - `tipo` (`NATURAL` | `JURIDICA`), `nombre` (o razón social), `paterno` y `materno`
+    (opcionales, solo naturales), `tipo_documento` (`CI` | `NIT` | `OTRO`), `documento`,
+    `correo` y `telefono` (opcionales).
+  - Único `(id_negocio, tipo_documento, documento)` cuando hay documento.
+  - El nombre para mostrar sale de un helper `nombreCompleto(persona)`, no de un `CONCAT`
+    repetido en cada consulta.
+- `usuario` (`BaseNegocioEntity`; `id_negocio = null` en plataforma): `usuario` (login),
+  `clave` (bcrypt, `select: false`), `id_persona` (obligatorio), `id_rol_usuario`,
+  `debe_cambiar_clave`, `totp_secreto` (cifrado, nullable), `totp_activo`, `totp_ultimo_paso`
+  (antirreúso), `intentos_fallidos` y `bloqueado_hasta` (bloqueo temporal, decisión 53).
+  - **Excepción a §4**: el login es **único en toda la plataforma**, no por negocio, porque el
+    login no pide el negocio. Índice único sobre `lower(usuario)` con `id_estado = 1`.
+  - `usuario_codigo_respaldo (id_usuario, hash, usado_en)`: códigos de respaldo de la 2FA, de
+    un solo uso (P, decisión 50).
+- `rol_usuario`: `id_negocio` (null en plataforma), `nombre`, `descripcion` y `es_fijo`. Único
+  `(id_negocio, nombre)`. El rol **Dueño** (`es_fijo = true`) viene de la seed con todos los
+  permisos y el servicio rechaza editarlo o quitarlo (decisión 44).
+- `modulo_sistema` y `opcion_modulo_sistema`: catálogo global, sin `id_negocio`. Sus filas solo
+  cambian por migración (decisión 45). Opciones: `ver`, `crear`, `editar`, `eliminar`,
+  `anular`, `cerrar`, `reabrir`, `ver_costos` (decisión 49).
+- `permiso_rol_usuario (id_rol_usuario, id_modulo_sistema, id_opcion_modulo_sistema, activo)`,
+  como SIAP.
+- `bitacora` (decisión 51): `id_negocio` (nullable para eventos de plataforma), `id_usuario`
+  (nullable: login fallido), `evento`, `detalle` (`jsonb`), `ip`, `user_agent`, `url`,
+  `metodo` y `fecha`. **Solo inserción**: mismo trigger `BEFORE UPDATE OR DELETE` que los
+  asientos (§7 Contabilidad).
+
+### Catálogo
+- `proveedor`: `id_persona` (único por negocio) y solo los datos comerciales (p. ej. notas).
+  Nombre, documento y contacto viven en `persona` (decisión 43). El futuro `cliente` (versión
+  completa) seguirá el mismo patrón.
 
 ### Documentos (decisión 37)
 Una tabla por tipo, con cabecera y detalle:
@@ -480,18 +529,56 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
   Credenciales malas, usuario desactivado o negocio suspendido → **401** (SIAP responde 400).
   Para el admin de plataforma, `negocio` es `null`. Se diseña desde cero, sin los campos
   heredados de SIAP.
+  - `usuario.nombre` sale de `nombreCompleto(persona)` (decisión 43).
+  - La respuesta incluye `usuario.debeCambiarClave` (decisión 48).
+  - La respuesta lleva `estado`: `OK` (trae el JWT), `CONFIGURAR_2FA` o `VERIFICAR_2FA`
+    (P, decisión 50). En los dos últimos no trae el JWT, sino un **token temporal** de 5 min
+    con `proposito: '2fa'` que el guard solo acepta en `POST /api/auth/2fa/configurar` y
+    `POST /api/auth/2fa/verificar`. Ninguna de esas rutas recibe `idUsuario`: el usuario sale
+    del token temporal.
+  - `configurar` (solo si `totp_activo = false`): el backend genera el secreto, lo guarda
+    cifrado como pendiente y devuelve la URI `otpauth://` (emisor "FARO") para el QR. El
+    secreto nunca vuelve desde el cliente. `verificar` con el primer código lo activa y
+    devuelve los 10 códigos de respaldo (se muestran una sola vez).
+  - `verificar` acepta el código de 6 dígitos (±1 paso de 30 s, rechaza un paso ya usado con
+    `totp_ultimo_paso`) o un código de respaldo, y devuelve la respuesta de login completa.
+    `totp_secreto` se cifra con `TOTP_CLAVE_CIFRADO` de `.env`.
+  - **Bloqueo temporal** (decisión 53): fallos de clave y de código suman en
+    `intentos_fallidos`; con 5 seguidos, `bloqueado_hasta = ahora + 15 min`. El mensaje es
+    siempre "Credenciales inválidas"; el motivo real va a la bitácora. El dueño (para sus
+    empleados) y el admin de plataforma pueden desbloquear antes.
+  - Diseño revisado contra la rama `dev` de CONTROLADOR; ver las fallas que se evitan en
+    `base-desde-siap.md`, "Referencias de CONTROLADOR".
+  - Todo login, correcto o fallido, se registra en `bitacora` (decisión 51).
 - JWT de 12 h firmado con `JWT_SECRET`; payload `{ idUsuario, idNegocio }`. Contraseñas con
   bcrypt. `@Publico()` marca las rutas sin token, como SIAP.
-- Guards globales: `JwtAuthGuard` (firma, vigencia y estado de usuario y negocio, §6) y
-  `PermisoGuard`.
+- Guards globales, en `seguridad/` (`common/` no importa de `seguridad/`;
+  `docs/base-desde-siap.md`):
+  - `JwtAuthGuard`: firma, vigencia y estado de usuario y negocio (§6). Si
+    `debe_cambiar_clave` es `true`, responde **403** a toda ruta salvo cambiar la contraseña
+    y cerrar sesión.
+  - `PermisoGuard`.
+- **Contraseñas** (decisión 48): el dueño escribe una clave temporal (mínimo 8 caracteres) al
+  crear un empleado. El dueño restablece la de sus empleados y el admin de plataforma la del
+  dueño; ambas acciones dejan `debe_cambiar_clave = true`. Sin recuperación por correo en la
+  preliminar.
 - **Permisos validados en el backend** (decisión 38):
   `@RequierePermiso('<módulo>', '<opción>')` en cada controlador o ruta, leyendo el esquema de
   módulos, opciones y roles portado de SIAP. El guard del frontend solo oculta menú y rutas.
+  - **`ver_costos`** (decisión 49): sin ese permiso, el backend **omite** de las respuestas
+    costo, margen y valor de inventario. No basta con ocultarlos en el frontend.
+  - Roles por negocio y Dueño fijo (decisión 44). Pantalla de permisos en matriz módulos ×
+    opciones (decisión 45).
+- **Sesión en el frontend** (decisión 47): token en `localStorage`; "Cerrar sesión" siempre
+  visible en el header; cerrar sesión en una pestaña la cierra en todas (evento `storage`); un
+  401 limpia el almacenamiento.
+- **IP del cliente** (bitácora): `request.ip`. Solo con `TRUST_PROXY` configurado (detrás de un
+  proxy confiable) se habilita `trust proxy` y se leen `x-forwarded-for` / `x-real-ip`.
 - `POST /api/registro` (público) crea en **una sola transacción**: el negocio y su sucursal
   principal, el régimen inicial (`negocio_regimen` desde el día 1 del mes actual), el plan de
   cuentas semilla con las categorías de gasto por defecto y sus subcuentas 5.2.1.xx (§7), los
-  roles Dueño y Empleado con sus permisos, el usuario dueño, los correlativos y el primer periodo
-  (mes actual, abierto). El inventario inicial se carga después
+  roles Dueño (fijo) y Empleado con sus permisos, la `persona` y el usuario del dueño (su
+  correo como `usuario`), los correlativos y el primer periodo (mes actual, abierto). El inventario inicial se carga después
   como ajuste `INICIAL`.
 
 ## 12. Tema Material 3 + Tailwind (decisiones 5 y 23)
@@ -546,4 +633,5 @@ Paleta **definitiva** (decisión 23, mockup aprobado en A6):
 | 13 | Rangos `^` en `package.json` | Versiones exactas (`save-exact`) | Decisión 25 |
 | 14 | notiflix, moment, FontAwesome, PrimeNG | MatSnackBar, date-fns, Material Symbols, solo Material | Decisiones 4 y 34 |
 
-Las correcciones a `docs/base-desde-siap.md` que salen de esta tabla quedan para A4.
+El inventario de lo que se porta, con sus dependencias ocultas, está en
+`docs/base-desde-siap.md` (corregido en A4).
