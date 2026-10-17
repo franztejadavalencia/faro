@@ -3,18 +3,18 @@
 Formato: `- [ ] ID · descripción · criterio de "listo"`. Una tarea = una sesión = un commit.
 Niveles de `spec.md`: P = versión preliminar, P+ = deseable en la preliminar, C = versión completa.
 
-## Fase 0: Análisis (sesión con Opus, plan mode, sin código)
+## Fase 0: Análisis (Opus, flujo de revisión, sin código)
 - [x] A1 · Escribir `docs/spec.md` (qué es FARO, usuarios, módulos) · aprobado por mí
 - [x] A2 · Cerrar decisiones 3, 4 y 5 de `docs/decisiones.md` · tabla actualizada
-- [ ] A3 · Escribir `docs/architecture.md` (versiones, carpetas, convenciones de naming,
+- [x] A3 · Escribir `docs/architecture.md` (versiones, carpetas, convenciones de naming,
         manejo de errores, auth, **módulo contable**: entidades `cuenta`, `asiento`,
         `asiento_detalle` con `producto_id` auxiliar, servicio que genera el asiento dentro
         de la misma transacción que el documento, historial de régimen) · aprobado por mí
 - [ ] A4 · Revisar `docs/base-desde-siap.md` leyendo el código real de SIAP y corregir el
         inventario (dependencias ocultas) · lista final
 - [ ] A5 · Desglosar Fase 1 y Fase 2 en tareas pequeñas en este archivo
-- [ ] A6 · Aprobar el mockup de dashboard y POS (identidad visual, decisión 23) · paleta y
-        tipografía fijadas en `docs/architecture.md`
+- [x] A6 · Aprobar el mockup de dashboard y POS (identidad visual, decisión 23) · aprobado
+        2026-10-17 (canvas "FARO · Dashboard y POS"); paleta y tipografía fijadas en A3
 
 ## Fase 1: Esqueleto (Sonnet)
 - [ ] B1 · Crear `faro-backend` con Nest CLI + config, lint, prettier, `.env.example` · `npm run start:dev` levanta y `/api/docs` muestra Swagger

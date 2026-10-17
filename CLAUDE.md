@@ -16,12 +16,34 @@ mapa general: mantenlo corto.
 - `docs/decisiones.md`: registro de decisiones (una línea por decisión, con su porqué).
 - `docs/base-desde-siap.md`: qué se reutiliza de `D:\SIAP` y cómo adaptarlo.
 - `docs/tasks.md`: tareas pequeñas y verificables. Trabaja **una tarea por sesión**.
+- `docs/revisiones/<ID>.md`: plan, preguntas y respuestas de cada tarea (ver abajo).
+
+## Flujo de revisión (obligatorio en toda tarea)
+
+Las tareas se revisan fuera de esta sesión, así que **nada importante queda solo en el chat**.
+
+1. **Planificar.** Antes de crear o cambiar archivos del proyecto, copia
+   `docs/revisiones/_plantilla.md` a `docs/revisiones/<ID>.md` (ej. `A3.md`) y llénalo:
+   plan, archivos, supuestos y preguntas numeradas. Pon `Estado: en revisión` y
+   **detente**: avisa que está listo para revisión y no implementes nada más.
+2. **Revisión.** El usuario escribe la sección `## Respuestas`, contestando por número. No
+   edites esa sección.
+3. **Aplicar.** Cuando te pidan aplicar `docs/revisiones/<ID>.md`, lee el archivo completo,
+   implementa según las respuestas y pon `Estado: aplicando`. Toda respuesta que sea una
+   decisión va también a `docs/decisiones.md`. Si surge una duda nueva, agrégala en
+   `## Preguntas nuevas`, vuelve a `Estado: en revisión` y detente.
+4. **Cerrar.** Completa `## Resultado` (qué se hizo, tests y lint, mensaje de commit
+   propuesto), pon `Estado: cerrada` y marca la tarea en `docs/tasks.md`.
+
+Una tarea muy pequeña (un typo, un ajuste de una línea) puede saltarse el paso 1 si el
+usuario lo dice explícitamente.
 
 ## Reglas generales
 
 - Si algo en `docs/` contradice lo que se te pide, dilo antes de proceder.
 - Si una tarea toca backend y frontend, dilo en el plan: qué cambia en cada lado.
 - Al cambiar un contrato de API, actualiza el DTO del frontend y los docs en la misma tarea.
-- Al terminar una tarea: tests y lint en verde, marca la tarea en `docs/tasks.md` y propón
-  el mensaje de commit.
+- Al terminar una tarea: tests y lint en verde y el paso 4 del flujo de revisión.
+- **Relee un archivo de `docs/` justo antes de editarlo** (no uses lo que leíste al inicio de la
+  sesión): se edita también desde otra conversación y podrías deshacer cambios ajenos.
 - SIAP es **solo referencia de lectura** (`--add-dir D:\SIAP`). Nunca modifiques nada ahí.

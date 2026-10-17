@@ -1,0 +1,12 @@
+# Dependencias y salidas de build
+node_modules/
+dist/
+.angular/
+coverage/
+
+# Variables de entorno: solo se commitea la plantilla
+**/.env*
+!**/.env.example
+
+# Claude Code: permisos locales de cada equipo
+.claude/settings.local.json

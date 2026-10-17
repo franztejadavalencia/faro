@@ -20,32 +20,47 @@ equipo**: todo lo que vive en el repo (CLAUDE.md, docs/, .claude/settings.json,
 (`claude --resume` solo ve las del equipo local) y tu config personal en `~/.claude/`.
 Por eso las decisiones se escriben en `docs/`, no se dejan en el chat.
 
-## 2. Sesión de análisis (Fase 0)
+## 2. El ciclo de cada tarea (revisión con Claude en el chat)
+
+Claude Code no deja el plan ni las preguntas en su chat: los escribe en
+`docs/revisiones/<ID>.md` (reglas en `CLAUDE.md`, plantilla en `docs/revisiones/_plantilla.md`).
+Así el plan se revisa en otra conversación, viaja con git y queda como historial.
+
+| Paso | Dónde | Qué pasa |
+|---|---|---|
+| 1. Planificar | Claude Code | Escribe `docs/revisiones/<ID>.md` con plan y preguntas, y se detiene |
+| 2. Revisar | Chat de Claude | "Claude Code terminó, revisemos": se lee el archivo, se analiza y se escribe `## Respuestas` en el mismo archivo |
+| 3. Aplicar | Claude Code | "Aplica @docs/revisiones/<ID>.md": implementa; si surgen dudas, las escribe y vuelve al paso 2 |
+| 4. Cerrar | Claude Code + tú | Completa `## Resultado`; revisas el diff en Cursor → `git commit` → `/clear` |
+
+**No uses plan mode**: en plan mode Claude Code no puede escribir archivos, así que el plan se
+quedaría en el chat. El archivo de revisión cumple esa función. Deja el modo normal, en el que
+Claude Code pide permiso antes de cada edición.
+
+## 3. Mensajes tipo
+
+Sesión de análisis (Fase 0):
 ```
 cd D:\FARO
 claude --add-dir D:\SIAP --model opus
 ```
-Pulsa **Shift+Tab** hasta ver "plan mode". Primer mensaje sugerido:
+> Tarea A3 de @docs/tasks.md. Sigue el flujo de revisión de @CLAUDE.md: investiga lo que
+> necesites en D:\SIAP y escribe docs/revisiones/A3.md con tu plan y tus preguntas. No
+> escribas nada más hasta que te lo pida.
 
-> Vamos a iniciar FARO. Lee @CLAUDE.md, @docs/decisiones.md, @docs/base-desde-siap.md y
-> @docs/tasks.md. SIAP está en D:\SIAP solo como referencia. Empecemos con la tarea A1:
-> hazme las preguntas que necesites para escribir docs/spec.md. Te explico qué es FARO: ...
-
-Haz A1 → A5 en esta sesión o en varias. Entre tareas: `/clear`. Si la sesión se alarga:
-`/compact`. Para A4, pídele: "usa subagentes para revisar las dependencias de auth y usuario
-en SIAP", así la exploración no llena tu contexto.
-
-## 3. Sesiones de implementación (Fase 1 en adelante)
+Sesión de implementación (Fase 1 en adelante; Sonnet por defecto, `/model` para cambiar):
 ```
 cd D:\FARO
-claude --add-dir D:\SIAP          # Sonnet por defecto; /model para cambiar
+claude --add-dir D:\SIAP
 ```
-Mensaje tipo:
+> Tarea B3 de @docs/tasks.md. Sigue el flujo de revisión de @CLAUDE.md. Basa el código en
+> D:\SIAP según @docs/base-desde-siap.md.
 
-> Implementa la tarea B3 de @docs/tasks.md. Basa el código en D:\SIAP según
-> @docs/base-desde-siap.md. Primero muéstrame el plan, luego implementa, corre tests y lint.
+Después de la revisión:
+> Aplica @docs/revisiones/B3.md. Corre tests y lint al terminar.
 
-Al terminar: revisa el diff en Cursor → `git commit` → `/clear` → siguiente tarea.
+Entre tareas: `/clear`. Si la sesión se alarga: `/compact`. Para explorar mucho código de
+SIAP, pídele que use subagentes, así la exploración no llena su contexto.
 
 ## 4. Backend y frontend en paralelo (cuando haya contrato de API)
 Dos terminales en Cursor:
@@ -58,7 +73,7 @@ git worktree add ..\FARO-front -b feat/frontend
 ## 5. Comandos que más usarás
 | Comando | Para qué |
 |---|---|
-| Shift+Tab | Alternar plan mode / auto-aceptar ediciones |
+| Shift+Tab | Cambiar de modo (normal / auto-aceptar ediciones / plan mode; en FARO se usa el normal) |
 | `/clear` | Contexto limpio entre tareas (lo que más ahorra tokens) |
 | `/compact` | Resumir una sesión larga sin perder el hilo |
 | `/model` | Opus para diseño o bugs difíciles, Sonnet para implementar |
