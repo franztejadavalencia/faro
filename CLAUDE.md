@@ -46,4 +46,8 @@ usuario lo dice explícitamente.
 - Al terminar una tarea: tests y lint en verde y el paso 4 del flujo de revisión.
 - **Relee un archivo de `docs/` justo antes de editarlo** (no uses lo que leíste al inicio de la
   sesión): se edita también desde otra conversación y podrías deshacer cambios ajenos.
+- **Decisiones de negocio con referencia profesional.** En inventario, costos, contabilidad,
+  impuestos, fechas y cierres, revisa cómo lo resuelven sistemas profesionales (ERP y POS
+  comerciales, normas contables) y cítalo en "Lo que encontré" de la revisión. Si FARO se
+  aparta, explica por qué.
 - SIAP es **solo referencia de lectura** (`--add-dir D:\SIAP`). Nunca modifiques nada ahí.

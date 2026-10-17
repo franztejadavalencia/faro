@@ -12,7 +12,16 @@ Niveles de `spec.md`: P = versión preliminar, P+ = deseable en la preliminar, C
         de la misma transacción que el documento, historial de régimen) · aprobado por mí
 - [ ] A4 · Revisar `docs/base-desde-siap.md` leyendo el código real de SIAP y corregir el
         inventario (dependencias ocultas) · lista final
-- [ ] A5 · Desglosar Fase 1 y Fase 2 en tareas pequeñas en este archivo
+- [ ] A5 · Desglosar Fase 1 y Fase 2 en tareas pequeñas en este archivo. Resolver antes, en
+        `docs/revisiones/A5.md`:
+        (1) orden de fechas del inventario: documentos que mueven stock con fecha no anterior
+        al último movimiento de la sucursal (como `validarOrdenFechaLote` de SIAP para lotes)
+        y fecha del movimiento y del asiento de una anulación;
+        (2) costo persistido al registrar (lo exige el asiento inmutable) frente al cálculo
+        FIFO al vuelo de SIAP (`ejecucion-proyecto/utils/fifo.util.ts`): qué se porta;
+        (3) datos para la defensa: `fecha_inicio` del negocio en el pasado, seed de
+        demostración que registra meses pasados en orden por los servicios reales y cierra
+        cada mes, y reloj inyectable para los tests
 - [x] A6 · Aprobar el mockup de dashboard y POS (identidad visual, decisión 23) · aprobado
         2026-10-17 (canvas "FARO · Dashboard y POS"); paleta y tipografía fijadas en A3
 
