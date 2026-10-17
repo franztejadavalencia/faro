@@ -19,8 +19,8 @@ archivos dependen de dominios de SIAP (institución, rol operativo, proyecto) qu
 
 ### Se porta adaptando
 - `seguridad/auth/` (controller, `auth.service`, `token.service`, `login.dto`,
-  `response-login.interface`). **Revisar**: el login de SIAP incluye selección de rol
-  operativo (dominio `institucion`). Decidir si FARO lo necesita.
+  `response-login.interface`). **Quitar** la selección de rol operativo (dominio
+  `institucion`): FARO no la usa (decisión 22); el tenant sale del usuario.
 - `abc/usuario/` (entity, service, controller, DTOs, `change-clave.dto`). Quitar relaciones
   con `persona`/`institucion` si FARO no las usa.
 - `abc/permiso/` (módulo sistema, opción de módulo, rol usuario, permiso rol usuario):
@@ -35,8 +35,8 @@ archivos dependen de dominios de SIAP (institución, rol operativo, proyecto) qu
 - `app/core/interceptors/` (`token`, `sesion-expirada`), `app/core/guards/` (`auth`,
   `redirect`, `permiso-rol-usuario`), `app/core/models/http/api-error.model.ts`,
   `app/core/services/sistema/msg.service.ts`.
-- `app/core/services/auth/` (`auth.service`, `session.service`); `seleccion-rol-operativo`
-  solo si se mantiene esa funcionalidad.
+- `app/core/services/auth/` (`auth.service`, `session.service`). **No** se porta
+  `seleccion-rol-operativo` (decisión 22).
 - `app/layout/` (layout, header, navbar, sidebar, sidemenu, boards). Quitar el logo GAMLP.
 - `app/shared/utils/` (`notify`, `http-params`, `resource`, `table-filter`, `text`,
   `tree-utils`, `auto-seleccionar`), `app/shared/pipes/` (fecha, moneda),
@@ -48,8 +48,8 @@ archivos dependen de dominios de SIAP (institución, rol operativo, proyecto) qu
   `eslint.config.js`, `prettier.config.js`, `.editorconfig`.
 
 ### Al portar
-- **Reemplazar cualquier componente PrimeNG por Angular Material** (si se confirma la
-  decisión 4). Antes de copiar un componente, buscar imports de `primeng`.
+- **Reemplazar cualquier componente PrimeNG por Angular Material** (decisión 4). Antes de
+  copiar un componente, buscar imports de `primeng`. Tailwind se mantiene (decisión 5).
 - `notiflix`, `fontawesome`, `moment` vs `date-fns`: elegir uno por necesidad (hoy SIAP tiene
   `moment` y `date-fns` a la vez).
 
