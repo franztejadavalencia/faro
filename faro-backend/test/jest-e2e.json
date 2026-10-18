@@ -1,0 +1,25 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": ".",
+  "testEnvironment": "node",
+  "testRegex": ".e2e-spec.ts$",
+  "transform": {
+    "^.+\\.ts$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^@common/(.*)$": "<rootDir>/../src/common/$1",
+    "^@seguridad/(.*)$": "<rootDir>/../src/seguridad/$1",
+    "^@plataforma/(.*)$": "<rootDir>/../src/plataforma/$1",
+    "^@catalogo/(.*)$": "<rootDir>/../src/catalogo/$1",
+    "^@inventario/(.*)$": "<rootDir>/../src/inventario/$1",
+    "^@compras/(.*)$": "<rootDir>/../src/compras/$1",
+    "^@ventas/(.*)$": "<rootDir>/../src/ventas/$1",
+    "^@gastos/(.*)$": "<rootDir>/../src/gastos/$1",
+    "^@contabilidad/(.*)$": "<rootDir>/../src/contabilidad/$1",
+    "^@cierre/(.*)$": "<rootDir>/../src/cierre/$1",
+    "^@analisis/(.*)$": "<rootDir>/../src/analisis/$1",
+    "^@database/(.*)$": "<rootDir>/../src/database/$1"
+  },
+  "globalSetup": "<rootDir>/e2e-global-setup.ts",
+  "testTimeout": 30000
+}

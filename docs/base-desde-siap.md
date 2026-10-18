@@ -3,6 +3,7 @@
 > Estado: **lista final (tarea A4)**. Fecha: 2026-10-17. Revisado contra el código real de
 > `D:\SIAP` (solo lectura). Hallazgos, dependencias y respuestas: `docs/revisiones/A4.md`.
 > Decisiones: `docs/decisiones.md` (43 a 51). Arquitectura: `docs/architecture.md`.
+> La columna "Tarea" usa la numeración de `docs/tasks.md` tras A5 (decisión 62), corregida en B1.
 
 **Copiar y adaptar, no copiar a ciegas.** Varios archivos dependen de dominios de SIAP que FARO
 no tiene (institución, rol operativo, proyecto) o de librerías que FARO no usa (PrimeNG,
@@ -56,9 +57,9 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
 | `services/request-context.service.ts` | ~ | Suma `idNegocio` y `obtenerIdNegocio()` | B2 |
 | `subscribers/auditoria.subscriber.ts` | ~ | Pone `id_negocio` del contexto al insertar y rechaza uno distinto (`architecture.md` §6) | B2 |
 | `interceptors/contexto-request.interceptor.ts` | ~ | Tipo de payload propio de `common`; suma `idNegocio` | B2 |
-| `guards/jwt-auth.guard.ts` | ~ | Pasa a `seguridad/auth/guards/`; valida en cada request el estado del usuario y del negocio y `debe_cambiar_clave` (decisiones 30 y 48) | B3 |
+| `guards/jwt-auth.guard.ts` | ~ | Pasa a `seguridad/auth/guards/`; valida en cada request el estado del usuario y del negocio y `debe_cambiar_clave` (decisiones 30 y 48) | B4 |
 | `decorators/publico.decorator.ts` | = | — | B2 |
-| `common.module.ts` | ~ | Sin `imports: [AuthModule]`; los `APP_GUARD` se registran en `seguridad` | B2/B3 |
+| `common.module.ts` | ~ | Sin `imports: [AuthModule]`; los `APP_GUARD` se registran en `seguridad` | B2/B4 |
 | `dto/anular.dto.ts`, `incluir-anulados.dto.ts`, `motivo.dto.ts`, `notas.dto.ts` | = | — | B2 |
 | `utils/anulacion.util.ts` (+ `anulacion.util.spec.ts`) | ~ | `conUsuarioAnulacion()` sale de `common` (a `seguridad/usuario`); se conserva `AHORA_DEL_SERVIDOR` | B2 |
 | `utils/date.utils.ts` | = | + spec nuevo (`fechaHoy` con el proceso en UTC) | B2 |
@@ -74,21 +75,21 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
 ### `seguridad/` y `abc/usuario`, `abc/permiso`
 | Archivo de SIAP | Cat. | Cambio en FARO | Tarea |
 |---|---|---|---|
-| `seguridad/auth/services/token.service.ts` | ~ | Payload `{ idUsuario, idNegocio }`; token temporal de 2FA (P, decisión 50) | B3 |
-| `seguridad/auth/services/auth.service.ts` | R | Sin rol operativo; 401 (SIAP: `findOneOrFail` + `catch` → 400); respuesta de `architecture.md` §11; `findMenu` y `findPermiso` filtran `id_estado`; nombre con `nombreCompleto(persona)`; registra en `bitacora` (decisión 51) | B3 |
-| `seguridad/auth/controllers/auth.controller.ts`, `dto/login.dto.ts` | ~ | `POST /auth/login` (SIAP: `POST /auth`) | B3 |
-| `seguridad/auth/types/response-login.interface.ts` | ✗ | Contrato nuevo (§11) | B3 |
-| `seguridad/auth/auth.module.ts` | ~ | `JWT_SECRET` desde `ConfigService` | B3 |
+| `seguridad/auth/services/token.service.ts` | ~ | Payload `{ idUsuario, idNegocio }`; token temporal de 2FA (P, decisión 50) | B4 (token temporal: B5) |
+| `seguridad/auth/services/auth.service.ts` | R | Sin rol operativo; 401 (SIAP: `findOneOrFail` + `catch` → 400); respuesta de `architecture.md` §11; `findMenu` y `findPermiso` filtran `id_estado`; nombre con `nombreCompleto(persona)`; registra en `bitacora` (decisión 51) | B4 |
+| `seguridad/auth/controllers/auth.controller.ts`, `dto/login.dto.ts` | ~ | `POST /auth/login` (SIAP: `POST /auth`) | B4 |
+| `seguridad/auth/types/response-login.interface.ts` | ✗ | Contrato nuevo (§11) | B4 |
+| `seguridad/auth/auth.module.ts` | ~ | `JWT_SECRET` desde `ConfigService` | B4 |
 | `abc/usuario/entities/usuario.entity.ts` | ~ | `id_persona` a la `persona` de FARO; `id_negocio`; `debe_cambiar_clave`; `totp_secreto` (cifrado), `totp_activo`; índice único global `lower(usuario)` con `id_estado = 1` (decisiones 43, 48 y 50) | B3 |
-| `abc/usuario/services/usuario.service.ts` | ~ | Sin `CLAVE_POR_DEFECTO = '1234'`: clave temporal del dueño (mín. 8) y restablecer clave (decisión 48); `findManyByStatus` usa el filtro (SIAP lo ignora); `changeClave` con `save()`; `findAllDetalle` sin `CONCAT` | B3 |
-| `abc/usuario/controllers/`, `dto/` (incl. `change-clave.dto.ts`), `types/`, `usuario.module.ts` | ~ | Sin `InstitucionModule`; `PartialType` desde `@nestjs/swagger` | B3 |
-| `abc/permiso/entities/rol-usuario.entity.ts` | ~ | `id_negocio` (null en plataforma); único `(id_negocio, nombre)`; marca de rol fijo (Dueño) (decisión 44) | B4 |
-| `abc/permiso/entities/modulo-sistema.entity.ts`, `opcion-modulo-sistema.entity.ts`, `constants/tipo-modulo-codigo.ts` | = | Catálogo global; filas solo por migración (decisión 45) | B4 |
-| `abc/permiso/entities/permiso-rol-usuario.entity.ts` | = | — | B4 |
-| `abc/permiso/services/permiso-rol-usuario.service.ts`, su controller y DTO | ~ | Rechaza editar el rol Dueño; matriz módulos × opciones; registra en `bitacora` el cambio de permisos | B4 |
-| `abc/permiso/services/modulo-sistema.service.ts` (`findAllArbol`) | ~ | Solo lectura | B4 |
-| CRUD de módulos, opciones y roles (`*-modulo-sistema.*`, `rol-usuario.*`: controllers, services, DTO) | ✗ / ~ | Módulos y opciones: ✗ (cambian por migración). Roles: ~, el dueño crea roles propios de su negocio | B4 |
-| — | nuevo | `@RequierePermiso` y `PermisoGuard` (decisión 38); omitir costos sin `ver_costos` (decisión 49) | B4 |
+| `abc/usuario/services/usuario.service.ts` | ~ | Sin `CLAVE_POR_DEFECTO = '1234'`: clave temporal del dueño (mín. 8) y restablecer clave (decisión 48); `findManyByStatus` usa el filtro (SIAP lo ignora); `changeClave` con `save()`; `findAllDetalle` sin `CONCAT` | B4 (`changeClave`) / B7 |
+| `abc/usuario/controllers/`, `dto/` (incl. `change-clave.dto.ts`), `types/`, `usuario.module.ts` | ~ | Sin `InstitucionModule`; `PartialType` desde `@nestjs/swagger` | B4 (`change-clave`) / B7 |
+| `abc/permiso/entities/rol-usuario.entity.ts` | ~ | `id_negocio` (null en plataforma); único `(id_negocio, nombre)`; marca de rol fijo (Dueño) (decisión 44) | B6 |
+| `abc/permiso/entities/modulo-sistema.entity.ts`, `opcion-modulo-sistema.entity.ts`, `constants/tipo-modulo-codigo.ts` | = | Catálogo global; filas solo por migración (decisión 45) | B6 |
+| `abc/permiso/entities/permiso-rol-usuario.entity.ts` | = | — | B6 |
+| `abc/permiso/services/permiso-rol-usuario.service.ts`, su controller y DTO | ~ | Rechaza editar el rol Dueño; matriz módulos × opciones; registra en `bitacora` el cambio de permisos | B6 |
+| `abc/permiso/services/modulo-sistema.service.ts` (`findAllArbol`) | ~ | Solo lectura | B6 |
+| CRUD de módulos, opciones y roles (`*-modulo-sistema.*`, `rol-usuario.*`: controllers, services, DTO) | ✗ / ~ | Módulos y opciones: ✗ (cambian por migración). Roles: ~, el dueño crea roles propios de su negocio | B6 |
+| — | nuevo | `@RequierePermiso` y `PermisoGuard` (decisión 38); omitir costos sin `ver_costos` (decisión 49) | B6 |
 
 ### Raíz del backend
 | Archivo de SIAP (`D:\SIAP\siap-backend\`) | Cat. | Cambio en FARO | Tarea |
@@ -97,7 +98,8 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
 | `src/app.module.ts` (solo la config de TypeORM) | ~ | `synchronize: false`, migraciones, `-c timezone=`, `DB_*`; sin `ServeStaticModule` ni `HttpModule` | B1 |
 | `test/jest-global-setup.js` | = | — | B1 |
 | `.eslintrc.js` | ~ | + `no-restricted-imports` (regla 3) | B1 |
-| `.prettierrc`, `.editorconfig`, `.nvmrc`, `nest-cli.json`, `tsconfig.build.json` | = | — | B1 |
+| `.prettierrc`, `.editorconfig`, `.nvmrc`, `nest-cli.json`, `tsconfig.build.json` | = | `nest-cli.json` sin el bloque `assets` (FARO no tiene `src/assets`) | B1 |
+| `.gitattributes` | = | En la raíz del monorepo, no en `faro-backend/` | B1 |
 | `tsconfig.json`, bloque `jest` de `package.json` | ~ | `strict: true` (decisión 33); aliases de FARO (§3) | B1 |
 
 ### Fuera del inventario (referencia, no se porta)
@@ -127,27 +129,27 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
 ### `layout/`, `shared/` y `domains/`
 | Archivo de SIAP | Cat. | Cambio en FARO | Tarea |
 |---|---|---|---|
-| `layout/` (layout, header, navbar, sidebar, sidemenu) | ~ | Logo de FARO (SIAP: `assets/images/logos/escudo-letras-negras.png`); Material Symbols en lugar de FontAwesome (`faUser`); "Cerrar sesión" siempre visible en el header (decisión 47); tema M3 | F3 |
+| `layout/` (layout, header, navbar, sidebar, sidemenu) | ~ | Logo de FARO (SIAP: `assets/images/logos/escudo-letras-negras.png`); Material Symbols en lugar de FontAwesome (`faUser`); "Cerrar sesión" siempre visible en el header (decisión 47); tema M3 | F4 |
 | `layout/boards/` | ✗ | Componente vacío | — |
 | `shared/constants/accion.ts` | ~ | Opciones de FARO (decisión 49): `ver`, `crear`, `editar`, `eliminar`, `anular`, `cerrar`, `reabrir`, `ver_costos` | F2 |
-| `shared/permiso/` (modelo y lookup de módulo) | = | — | F4 |
+| `shared/permiso/` (modelo y lookup de módulo) | = | — | F3 |
 | `shared/models/tree-data.model.ts`, `shared/utils/tree-utils.service.ts` | ✗ | Dependen de PrimeNG `TreeTable`; las tablas jerárquicas son `mat-table` planas con sangría por nivel | — |
-| `shared/utils/notify.util.ts` (+ spec) | ~ | `MatSnackBar`; `extractErrorMessage` igual | F5 |
-| `shared/utils/resource.util.ts` (+ spec) | ~ | El spec mockea `Notify` de notiflix: cambiar el mock | F5 |
-| `shared/utils/http-params.util.ts`, `table-filter.util.ts`, `text.util.ts`, `auto-seleccionar.util.ts` (+ spec) | = | — | F5 |
-| `shared/pipes/formato-moneda.pipe.ts` | R | Pipe `moneda` (§12): recibe string, signo opcional, sin aritmética | F5 |
-| `shared/pipes/formato-fecha.pipe.ts` | ~ | Locale `'es'` (SIAP: `'en-US'`) | F5 |
+| `shared/utils/notify.util.ts` (+ spec) | ~ | `MatSnackBar`; `extractErrorMessage` igual | F3 |
+| `shared/utils/resource.util.ts` (+ spec) | ~ | El spec mockea `Notify` de notiflix: cambiar el mock | F3 |
+| `shared/utils/http-params.util.ts`, `table-filter.util.ts`, `text.util.ts`, `auto-seleccionar.util.ts` (+ spec) | = | — | F3 |
+| `shared/pipes/formato-moneda.pipe.ts` | R | Pipe `moneda` (§12): recibe string, signo opcional, sin aritmética | F3 |
+| `shared/pipes/formato-fecha.pipe.ts` | ~ | Locale `'es'` (SIAP: `'en-US'`) | F3 |
 | `shared/pages/acceso-denegado/` | = | — | F3 |
-| `shared/components/btn/`, `combobox/` (con sus 3 specs), `chip-editable/` | = | Sin dependencias externas | F5 |
-| `shared/components/notas-dialog/`, `editar-valor-dialog/` | ~ | `Confirm` → `ConfirmDialogComponent` (regla 7) | F5 |
-| — | nuevo | `ConfirmDialogComponent` + servicio `confirmar()` (decisión 46) | F5 |
-| — | nuevo | Buscador de persona con alta en el mismo formulario (decisión 43), sobre el `combobox` | F4 |
+| `shared/components/btn/`, `combobox/` (con sus 3 specs), `chip-editable/` | = | Sin dependencias externas | F3 |
+| `shared/components/notas-dialog/`, `editar-valor-dialog/` | ~ | `Confirm` → `ConfirmDialogComponent` (regla 7) | F3 |
+| — | nuevo | `ConfirmDialogComponent` + servicio `confirmar()` (decisión 46) | F3 |
+| — | nuevo | Buscador de persona con alta en el mismo formulario (decisión 43), sobre el `combobox` | F6 |
 | `shared/components/carga-archivo/`, `mapa-punto/` | ✗ | FARO no sube archivos; `mapa-punto` usa leaflet | — |
 | `shared/institucion/`, `shared/proyecto/`, `shared/ciclo-vida/`, `shared/catalogo-base/`, `shared/documento-adjunto/`, `shared/costeo-personal/` | ✗ | Dominios de SIAP | — |
-| `domains/login/login.component.ts`, `models/request-status.model.ts` | ~ | Sin notiflix; sin `components/seleccion-rol-operativo/` | F3 |
-| `domains/usuario/**` (incl. `cambiar-contrasena`) | ~ | Persona de FARO con buscador (no `@institucion`, sin unidad organizacional); clave temporal; restablecer clave; sin notiflix | F4 |
-| `domains/permiso/components/permiso-rol-usuario/` | R | Matriz módulos × opciones con casillas (`mat-table`); el rol Dueño se muestra de solo lectura (decisiones 44 y 45) | F4 |
-| `domains/permiso/components/rol-usuario/` | ~ | Roles del negocio; sin notiflix | F4 |
+| `domains/login/login.component.ts`, `models/request-status.model.ts` | ~ | Sin notiflix; sin `components/seleccion-rol-operativo/` | F4 |
+| `domains/usuario/**` (incl. `cambiar-contrasena`) | ~ | Persona de FARO con buscador (no `@institucion`, sin unidad organizacional); clave temporal; restablecer clave; sin notiflix | F6 (`cambiar-contrasena`: F4) |
+| `domains/permiso/components/permiso-rol-usuario/` | R | Matriz módulos × opciones con casillas (`mat-table`); el rol Dueño se muestra de solo lectura (decisiones 44 y 45) | F6 |
+| `domains/permiso/components/rol-usuario/` | ~ | Roles del negocio; sin notiflix | F6 |
 | `domains/permiso/components/modulo-sistema/`, `opcion-modulo-sistema/` | ✗ | Módulos y opciones cambian por migración (decisión 45) | — |
 
 ### Raíz del frontend
@@ -155,7 +157,7 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
 |---|---|---|---|
 | `src/app/app.config.ts` | ~ | Sin `providePrimeNG`; `DateFnsAdapter` (`@angular/material-date-fns-adapter`) con locale `es` en lugar de `MomentDateAdapter`; formatos de fecha `dd/MM/yyyy` | F1 |
 | `src/main.ts` | ~ | Sin `Notiflix.*.init`; se mantiene `registerLocaleData(localeEs)` | F1 |
-| `src/app/app.routes.ts` | R | Solo login, layout, acceso denegado, cambiar contraseña, usuario y permiso | F3 |
+| `src/app/app.routes.ts` | R | Solo login, layout, acceso denegado, cambiar contraseña, usuario y permiso | F4 |
 | `src/environments/`, `eslint.config.js`, `prettier.config.js`, `.editorconfig` | = | — | F1 |
 | `tsconfig.json` | ~ | Ya es `strict: true`; aliases de FARO (§3) | F1 |
 | `src/assets/styles/_variables.scss`, `src/styles.scss` | ✗ | Tema M3 y tokens `--faro-*` propios (§12) | F1 |

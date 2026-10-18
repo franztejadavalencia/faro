@@ -14,7 +14,7 @@ Se fijan **exactas**, sin `^` ni `~`, con `save-exact=true` en el `.npmrc` de ca
 ### Entorno
 | Componente | Versión |
 |---|---|
-| Node | 22.19.0 (`.nvmrc` → `v22.19.0`; `engines.node` → `22.19.0`) |
+| Node | 22.19.0 en `.nvmrc` (`v22.19.0`); `engines.node` → `>=22.19.0 <23` (B1: el código no depende del parche; los equipos tienen 22.23.1 y SIAP en producción usa 22.22.0 en `ecosystem.config.js`) |
 | npm | 10.9.x (`engines.npm`) |
 | PostgreSQL | 16.15 (decisión 26) |
 
@@ -34,11 +34,22 @@ Se fijan **exactas**, sin `^` ni `~`, con `save-exact=true` en el `.npmrc` de ca
 | bcrypt | 5.1.1 |
 | reflect-metadata | 0.2.2 |
 | dotenv | 16.4.5 (declarada como dependencia directa; en SIAP llega transitiva) |
-| decimal.js | nueva en FARO: última estable al instalarla en B1, fijada exacta y anotada aquí |
+| rxjs | 7.8.1 |
+| decimal.js | nueva en FARO: **10.6.0** (última estable en B1); se instala en B2, junto con el transformer y `math.utils` que la usan |
 | otplib / qrcode | nuevas en FARO, a evaluar al implementar la 2FA (P, decisión 50); versión exacta aquí al instalarlas |
 | typescript | 5.6.3 |
-| jest / supertest | 29.7.0 / 7.0.0 |
+| jest / supertest / ts-jest | 29.7.0 / 7.0.0 / 29.2.5 |
 | eslint / prettier | 8.57.1 / 3.5.3 |
+| @typescript-eslint/eslint-plugin, @typescript-eslint/parser | 8.8.1 |
+| eslint-config-prettier / eslint-plugin-prettier | 9.1.0 / 5.2.1 |
+| @nestjs/schematics | 10.1.4 |
+| @types/jest / @types/node / @types/express / @types/supertest | 29.5.13 / 20.16.11 / 4.17.21 / 6.0.2 |
+| ts-node / tsconfig-paths / cross-env / source-map-support | 10.9.2 / 4.2.0 / 7.0.3 / 0.5.21 |
+
+Cada tarea instala solo lo que usa (B1): `bcrypt` llega en B3 y `@nestjs/jwt` en B4, con la
+versión de esta tabla. No se instalan `ts-node-dev` (§14), `typeorm-ts-node-commonjs` (la CLI de
+TypeORM corre con `ts-node -r tsconfig-paths/register`) ni `swagger-ui-express`
+(`@nestjs/swagger` 7 trae `swagger-ui-dist`).
 
 ### Frontend (`faro-frontend`)
 | Paquete | Versión |
@@ -70,8 +81,10 @@ tarea que lo instala.
 - PostgreSQL 16.15 local en `localhost:5432`, el mismo servidor que usa SIAP.
 - Bases:
   - `faro_dev`: desarrollo (ya existe, vacía).
-  - `faro_test`: tests e2e. **Hay que crearla** (`CREATE DATABASE faro_test;`) antes de correr
-    los e2e, porque estos vacían tablas. Nunca se apuntan los e2e a `faro_dev`.
+  - `faro_test`: tests e2e (creada en B1). Los e2e vacían tablas: nunca se apuntan a
+    `faro_dev`. El setup de los e2e se niega a correr si `DB_NAME` no termina en `_test`.
+- Usuario de base: en desarrollo, `postgres` local. **Pendiente para el despliegue**: un usuario
+  propio `faro` con permisos solo sobre sus bases (B1).
 - Variables de entorno en `faro-backend/`:
 
   | Archivo | Uso | Git |
@@ -81,27 +94,59 @@ tarea que lo instala.
   | `.env.test` | e2e → `faro_test` | **ignorado** |
   | `.env.production` | despliegue | **ignorado** |
 
-  `.env.example`:
+  `.env.example` (sin comentarios aquí; el archivo los tiene):
   ```dotenv
+  NODE_ENV=development
+  PORT=3000
   DB_HOST=localhost
   DB_PORT=5432
   DB_NAME=faro_dev
   DB_USER=postgres
   DB_PASSWORD=cambiar
   JWT_SECRET=cambiar
-  PORT=3000
+  TOTP_CLAVE_CIFRADO=cambiar
+  CORS_ORIGIN=http://localhost:4200
+  TRUST_PROXY=
+  SWAGGER=
   ```
+  - `src/config/env.validation.ts` valida el `.env` al arrancar (app, CLI de migraciones y e2e):
+    si una variable falta o no cumple, la app no arranca y dice cuál.
+  - `CORS_ORIGIN`: uno o varios orígenes separados por coma.
+  - `TRUST_PROXY`: vacío = sin proxy (`request.ip`); con valor va a `trust proxy` de Express
+    (número de proxies, `loopback`, IPs o subredes). `true` y `false` se rechazan (decisión 51).
+  - `SWAGGER`: solo cuenta en `production` (ver abajo).
+  - `TOTP_CLAVE_CIFRADO` es opcional hasta B5. Las variables de tareas futuras (clave del admin
+    de la seed en B3, `DEMO_CLAVE` en D15) las agrega cada tarea.
 - **Credenciales reales solo en los `.env.*` ignorados.** Nunca en `docs/`, en el código ni en
   los tests.
 - `.gitignore` en la raíz del repo (decisión 42): `node_modules/`, `dist/`, `.angular/`,
   `coverage/`, `**/.env*` salvo `!**/.env.example`, y `.claude/settings.local.json` (permisos
   locales de cada equipo). `.claude/settings.json` se commitea solo si se crea uno compartido.
-- `ConfigModule` (`@nestjs/config`) carga `.env.${NODE_ENV}`; ya no se usa `dotenv` a mano en
-  `main.ts`.
+- `ConfigModule` (`@nestjs/config`) carga `.env.${NODE_ENV}` (`development` si no hay
+  `NODE_ENV`); ya no se usa `dotenv` a mano en `main.ts`. `dotenv` solo lo usan la CLI de
+  TypeORM (`src/database/data-source.ts`) y el setup de los e2e, que corren fuera de Nest.
 - `synchronize: false` siempre. El esquema se crea **solo con migraciones** de TypeORM, desde la
   primera tabla (decisión 27). Las seeds (plan de cuentas semilla, regímenes, módulos y opciones
   de permisos, admin de plataforma) viven en `src/database/seeds`.
-- Swagger habilitado en `/api/docs`. Prefijo global `/api`.
+  - Una sola función, `opcionesTypeOrm()` (`src/database/typeorm.config.ts`), arma la conexión
+    para la app y para la CLI, con `-c timezone=America/La_Paz` y `applicationName: 'FARO'`.
+  - Tabla de migraciones: `migrations` (la de TypeORM). Archivos `<timestamp>-<Nombre>.ts` en
+    `src/database/migrations`.
+  - Scripts: `migration:create -- src/database/migrations/<Nombre>`,
+    `migration:generate -- src/database/migrations/<Nombre>`, `migration:run`,
+    `migration:revert`, `migration:show` (sobre `faro_dev`) y `migration:run:test`,
+    `migration:revert:test`, `migration:show:test` (sobre `faro_test`).
+- Prefijo global `/api`. Swagger en `/api/docs` (JSON en `/api/docs-json`): activo en
+  `development` y `test`; en `production` solo con `SWAGGER=true` (B1: no exponer el esquema de
+  la API sin decidirlo).
+- `GET /api/salud`: chequeo de salud permanente (`SELECT 1`). 200 `{ estado, baseDatos }`; 503
+  si la base no responde, sin detalles de la base en la respuesta (van al log). Será
+  `@Publico()` desde B4.
+- Tests: `npm test` (unit, `src/**/*.spec.ts`, proceso en `TZ=UTC`) y `npm run test:e2e`
+  (`test/**/*.e2e-spec.ts`, `NODE_ENV=test`, `--runInBand`). El setup de los e2e migra
+  `faro_test`; cada suite llama `limpiarBase()` (`TRUNCATE … RESTART IDENTITY CASCADE` de todo
+  `public` salvo `migrations`) en `beforeAll` y levanta la app con `crearApp()`, que usa el mismo
+  `configurarApp()` que `main.ts`.
 
 ## 3. Carpetas
 
@@ -120,12 +165,17 @@ faro-backend/
 │   ├── contabilidad/  cuenta, asiento, constructores de asientos, control de cuadre
 │   ├── cierre/        cierre y reapertura de mes, resultado mensual
 │   ├── analisis/      estado de resultados, ranking, dashboard
+│   ├── salud/         GET /api/salud
+│   ├── config/        validación de las variables de entorno
 │   ├── database/
+│   │   ├── typeorm.config.ts   conexión única para la app y la CLI
+│   │   ├── data-source.ts      DataSource de la CLI de migraciones
 │   │   ├── migrations/
 │   │   └── seeds/
 │   ├── app.module.ts
+│   ├── configurar-app.ts       prefijo, pipes, CORS, trust proxy, Swagger (main.ts y e2e)
 │   └── main.ts
-└── test/              e2e (supertest) y su setup
+└── test/              e2e (supertest), su setup y utils (crearApp, limpiarBase)
 ```
 - Dentro de cada módulo, la misma división que SIAP:
   `controllers/ dto/ entities/ services/ types/ constants/` (y `utils/` si hace falta).
@@ -694,6 +744,6 @@ Paleta **definitiva** (decisión 23, mockup aprobado en A6):
 | 12 | JWT `{ idUsuario }`, selección de rol operativo | JWT `{ idUsuario, idNegocio }`, sin rol operativo | Decisión 22; tenant |
 | 13 | Rangos `^` en `package.json` | Versiones exactas (`save-exact`) | Decisión 25 |
 | 14 | notiflix, moment, FontAwesome, PrimeNG | MatSnackBar, date-fns, Material Symbols, solo Material | Decisiones 4 y 34 |
-
+| 15 | `start:dev` con `ts-node-dev --respawn -r tsconfig-paths/register` | `nest start --watch` con `cross-env NODE_ENV=development` | `ts-node-dev` sin mantenimiento desde 2022; la CLI compila con `tsc` y reescribe los aliases, mismo camino que `start:prod` (B1) |
 El inventario de lo que se porta, con sus dependencias ocultas, está en
 `docs/base-desde-siap.md` (corregido en A4).

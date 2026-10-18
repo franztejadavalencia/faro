@@ -34,13 +34,13 @@ con Opus (decisión 63); el resto, con Sonnet.
 ## Fase 1: Esqueleto (Sonnet; "(Opus)" donde se indica)
 Backend (B) y frontend (F). Pueden avanzar en paralelo cuando haya contrato.
 
-- [ ] B1 · Crear `faro-backend`: Nest CLI, `ConfigModule` (`.env.*`), TypeORM con
+- [x] B1 · Crear `faro-backend`: Nest CLI, `ConfigModule` (`.env.*`), TypeORM con
         `synchronize: false` y CLI de migraciones, `-c timezone=`, Swagger en `/api/docs`,
         prefijo `/api`, CORS, ESLint (+ `no-restricted-imports` de `BaseEntity`), Prettier,
         `.npmrc save-exact`, `.env.example` (incluye `TOTP_CLAVE_CIFRADO`, `TRUST_PROXY`,
         `CORS_ORIGIN`), Jest unit + e2e contra `faro_test` con `TRUNCATE` entre suites ·
         `start:dev` levanta; `/api/docs` responde; `migration:run` corre en vacío; un e2e de
-        humo pasa contra `faro_test`
+        humo pasa contra `faro_test` · cerrada 2026-10-17 (decisiones 64 a 73)
 - [ ] B2 · Portar `common/` (`base-desde-siap.md`): entidades base + `BaseNegocioEntity`,
         `RequestContextService` con `idNegocio`, `AuditoriaSubscriber`, `@Publico`, DTOs,
         `anulacion.util`, `date.utils`, `Reloj`/`RelojFijo` (decisión 61), `math.utils` con
