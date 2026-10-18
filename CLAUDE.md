@@ -51,3 +51,5 @@ usuario lo dice explícitamente.
   comerciales, normas contables) y cítalo en "Lo que encontré" de la revisión. Si FARO se
   aparta, explica por qué.
 - SIAP es **solo referencia de lectura** (`--add-dir D:\SIAP`). Nunca modifiques nada ahí.
+  Si encuentras un error o riesgo en SIAP, anótalo en `docs/pendientes-siap.md` (con su
+  origen) para corregirlo en una sesión propia de SIAP.
