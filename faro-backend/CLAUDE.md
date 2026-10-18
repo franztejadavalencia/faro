@@ -39,3 +39,25 @@ Swagger: `http://localhost:3000/api/docs`. Salud: `GET /api/salud`.
   nuevo va en los tres.
 - Una dependencia nueva se instala exacta (`.npmrc` `save-exact`) y se anota en
   `architecture.md` §1 en la misma tarea.
+- **Parches de seguridad** del mismo minor: solo dentro del plan de la tarea que los detecta
+  (decisión 74). Al cerrar cada tarea, `npm audit --omit=dev` y se anota el resultado.
+
+## `common/` (B2)
+- **Todo dato de un negocio se lee con `NegocioRepository`**
+  (`NegocioRepositoryFactory.para(Entidad, manager?)`), nunca con `Repository` a mano ni con un
+  `idNegocio` escrito en cada consulta. En su QueryBuilder no hay `orWhere()`: las condiciones OR
+  van en `andWhere(new Brackets(...))`. Solo `plataforma/` lee varios negocios (decisión 77).
+- **Entidades**: heredan de `BaseNegocioEntity` / `BaseAnulableEntity` (`@common/entities`). Las
+  de plataforma con `id_negocio` nulo redeclaran la columna como nullable. Fechas técnicas
+  `timestamptz` (decisión 75).
+- **Solo `save()` audita** (`usuario_registro`, `usuario_modificacion`, `id_negocio`). Con
+  `update()`, `insert()` o QueryBuilder sobre esas tablas, la auditoría se escribe a mano.
+- **Fechas de negocio con `Reloj`** (`reloj.hoy()`, `ahora()`), nunca `new Date()` ni
+  `CURRENT_DATE`. Fechas técnicas y de seguridad con la hora real (decisión 61). En tests,
+  `overrideProvider(Reloj).useValue(new RelojFijo('AAAA-MM-DD'))`.
+- **Montos, costos y tasas con `Decimal`** (`import { Decimal } from 'decimal.js'`), redondeo con
+  `redondearMonto` / `redondearCosto`, columnas `numeric` con `decimalTransformer`. Nunca `number`.
+- **Errores**: las reglas de negocio lanzan `HttpException` con mensaje en español; el filtro
+  global traduce 23505/23503 → 409, 23514 → 400 y lo demás → 500 sin detalles de la base.
+- **Swagger**: el plugin de la CLI documenta los `*.dto.ts` y `*.entity.ts`; se escribe
+  `@ApiProperty` solo para `example`, enums o tipos que el plugin no infiere.

@@ -28,14 +28,14 @@ Se fijan **exactas**, sin `^` ni `~`, con `save-exact=true` en el `.npmrc` de ca
 | @nestjs/jwt | 12.0.1 |
 | @nestjs/swagger | 7.4.2 |
 | @nestjs/config | 3.2.3 |
-| typeorm | 0.3.20 |
+| typeorm | **0.3.31** (SIAP: 0.3.20). Parche de seguridad del mismo minor (decisión 74, B2): cierra la inyección SQL en `repository.save`/`update` y en `migration:generate`. Desde 0.3.23, `update({}, …)` y `delete({})` con criterio vacío lanzan error |
 | pg | 8.13.0 |
 | class-validator / class-transformer | 0.14.1 / 0.5.1 |
 | bcrypt | 5.1.1 |
 | reflect-metadata | 0.2.2 |
 | dotenv | 16.4.5 (declarada como dependencia directa; en SIAP llega transitiva) |
 | rxjs | 7.8.1 |
-| decimal.js | nueva en FARO: **10.6.0** (última estable en B1); se instala en B2, junto con el transformer y `math.utils` que la usan |
+| decimal.js | nueva en FARO: **10.6.0**, instalada en B2 junto con el transformer y `math.utils` que la usan. Se importa como `import { Decimal } from 'decimal.js'` (export con nombre; el `tsconfig` no tiene `esModuleInterop`) |
 | otplib / qrcode | nuevas en FARO, a evaluar al implementar la 2FA (P, decisión 50); versión exacta aquí al instalarlas |
 | typescript | 5.6.3 |
 | jest / supertest / ts-jest | 29.7.0 / 7.0.0 / 29.2.5 |
@@ -50,6 +50,13 @@ Cada tarea instala solo lo que usa (B1): `bcrypt` llega en B3 y `@nestjs/jwt` en
 versión de esta tabla. No se instalan `ts-node-dev` (§14), `typeorm-ts-node-commonjs` (la CLI de
 TypeORM corre con `ts-node -r tsconfig-paths/register`) ni `swagger-ui-express`
 (`@nestjs/swagger` 7 trae `swagger-ui-dist`).
+
+**Parches de seguridad** (decisión 74): los del mismo minor se aplican en FARO aunque se aparten
+de SIAP, siempre dentro del plan de la tarea que los detecta. Cada tarea corre
+`npm audit --omit=dev` al cerrar y anota el resultado. Tras B2 quedan 15 hallazgos (6 altas,
+9 moderadas) en `@nestjs/*`, `express`, `multer`, `lodash`, `js-yaml` y el `uuid` de
+`@nestjs/typeorm`; `npm audit` solo los resuelve con Nest 11/12 (cambio mayor, fuera de la
+decisión 74).
 
 ### Frontend (`faro-frontend`)
 | Paquete | Versión |
@@ -154,7 +161,9 @@ tarea que lo instala.
 ```
 faro-backend/
 ├── src/
-│   ├── common/        entidades base, utils, filtro de errores, guards, interceptors, subscribers
+│   ├── common/        entities/ (BaseEntity…), reloj/, filters/ (errores), services/ (contexto),
+│   │                  subscribers/, interceptors/, decorators/, dto/, types/, errors/, utils/.
+│   │                  No importa de seguridad/ ni de dominios (los guards viven en seguridad/)
 │   ├── seguridad/     auth, usuario, permiso (módulo, opción, rol)
 │   ├── plataforma/    negocio, régimen, sucursal, periodo, correlativo, plan, registro
 │   ├── catalogo/      línea, producto, proveedor
@@ -265,12 +274,27 @@ completa.
 - El JWT lleva `{ idUsuario, idNegocio }`. `RequestContextService` (AsyncLocalStorage de SIAP)
   suma `idNegocio` a `{ idUsuario, ip, url, metodo }`.
 - **El filtro por `id_negocio` vive en una base común y no se escribe a mano en cada consulta**:
-  - `NegocioRepository<T>` (en `common/`) envuelve `Repository<T>` / `EntityManager` y agrega
-    `id_negocio` del contexto a `find*`, `count`, `requireActiveEntity()` y a los
-    `createQueryBuilder()` que crea.
-  - En inserciones, `id_negocio` lo pone la base desde el contexto; el subscriber de auditoría
-    lanza error si una entidad `BaseNegocioEntity` llega con un `id_negocio` distinto al del
-    contexto.
+  - `NegocioRepository<T>` (en `common/utils/`, decisión 77) **envuelve** un `Repository<T>`
+    (no hereda de él, para no exponer `save`/`update`/`delete`/`query` sin filtro). Se obtiene
+    con `NegocioRepositoryFactory.para(Entidad, manager?)`; con `manager` funciona dentro de una
+    transacción. Agrega `id_negocio` del contexto a `find`, `findOne`, `findBy`, `findOneBy`,
+    `findAndCount`, `count`, `countBy`, `exists`, `requireActiveEntity()` y
+    `createQueryBuilder()`.
+    - El filtro **siempre gana**: pisa un `idNegocio` que traiga el `where` (también en cada
+      elemento de un `where` en arreglo).
+    - **Falla cerrado**: sin `idNegocio` en el contexto (usuario de plataforma o sin sesión)
+      lanza 403 en lugar de consultar sin filtro.
+    - En su QueryBuilder, `where()` se comporta como `andWhere()` y **`orWhere()` lanza error**
+      (`a AND b OR c` trae filas de cualquier negocio): las condiciones OR van en
+      `andWhere(new Brackets(...))`. Un builder obtenido con `clone()` ya no lleva esas
+      protecciones, pero conserva el filtro.
+    - El módulo de plataforma (D14), que sí lee varios negocios, usa repositorios normales
+      **solo dentro de `plataforma/`**, con consultas propias y sin datos comerciales.
+  - `AuditoriaSubscriber` (solo con `save()`): en inserciones pone `id_negocio` del contexto si
+    la entidad no lo trae y lanza `NegocioIncorrectoError` (→ 500) si trae uno distinto. En
+    updates rechaza guardar una fila de otro negocio y **cambiar el `id_negocio` de una fila
+    existente**, aunque no haya contexto. Sin `idNegocio` en el contexto (registro público,
+    seed, plataforma) respeta el de la entidad y el `NOT NULL` hace el resto.
   - Las consultas SQL crudas (reportes, control de cuadre) reciben `idNegocio` como parámetro
     obligatorio de la función que las arma.
 - Toda referencia que llega en un DTO (producto, línea, proveedor, categoría, sucursal…) se
@@ -289,10 +313,15 @@ completa.
 
 ### Entidades base (`common/entities`)
 - `BaseEntity`: `fecha_registro`, `fecha_modificacion`, `id_estado` (1 = activo),
-  `usuario_registro`, `usuario_modificacion` (como SIAP).
-- `BaseNegocioEntity extends BaseEntity`: `id_negocio`.
-- `BaseAnulableEntity extends BaseNegocioEntity`: `anulado`, `fecha_anulacion`,
+  `usuario_registro`, `usuario_modificacion` (como SIAP, `integer` sin FK). Las fechas técnicas
+  son **`timestamptz`** (decisión 75; SIAP usa `timestamp` sin zona).
+- `BaseNegocioEntity extends BaseEntity`: `id_negocio` (NOT NULL). Solo la columna: la FK a
+  `negocio` la declara cada entidad concreta. `persona`, `usuario` y `rol_usuario`, que admiten
+  `id_negocio` nulo (plataforma), **redeclaran** la columna como nullable.
+- `BaseAnulableEntity extends BaseNegocioEntity`: `anulado`, `fecha_anulacion` (`timestamptz`),
   `usuario_anulacion`, `motivo_anulacion varchar(500)`.
+- Se importan de `@common/entities` (barrel); la regla de ESLint prohíbe `BaseEntity` de
+  `typeorm`.
 - `asiento` y `asiento_detalle` **no** heredan los campos de modificación: solo `id_negocio`,
   `fecha_registro` y `usuario_registro` (son inmutables, §8).
 
@@ -578,11 +607,16 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
 
   | Origen | Respuesta |
   |---|---|
-  | `HttpException` | tal cual |
-  | Postgres 23505 (único) | 409 |
-  | Postgres 23503 (FK) | 409 |
-  | Postgres 23514 (CHECK) | 400 |
-  | `AsientoDescuadradoError` y el resto | 500, mensaje genérico, log con detalle |
+  | `HttpException` | tal cual (incluido el 503 de `/api/salud`) |
+  | Postgres 23505 (único) | 409, "Ya existe un registro con esos datos." |
+  | Postgres 23503 (FK) | 409, "El registro está relacionado con otros datos o referencia uno que no existe." |
+  | Postgres 23514 (CHECK) | 400, "Los datos no cumplen una regla de validación." |
+  | `AsientoDescuadradoError`, `NegocioIncorrectoError` y el resto | 500, "Error interno del servidor", log con detalle |
+
+  Implementado en B2 (`common/filters/excepciones.filter.ts`, `@Catch()`). La respuesta **nunca**
+  trae la restricción, la tabla ni el detalle de Postgres: van al `Logger` (`warn` para 409 y
+  400, `error` con el stack para 500). Un servicio que quiera un mensaje propio ("Ya existe un
+  producto con ese código") valida antes y lanza `ConflictException`.
 
 - Las reglas de negocio lanzan `BadRequestException` (400) con un mensaje en español ("No hay
   stock suficiente de …", "El mes 2026-09 está cerrado").
@@ -697,13 +731,17 @@ Paleta **definitiva** (decisión 23, mockup aprobado en A6):
 - Al cerrar cada tarea: tests y lint en verde.
 
 ### Reloj inyectable (decisión 61)
-- `Reloj` en `common/` con `ahora()` y `hoy()` (en `ZONA_HORARIA`) reemplaza toda lectura
-  directa de la hora del sistema para **fechas de negocio**: "no posterior a hoy", el periodo de
-  un documento nuevo y la fecha por defecto de los documentos. `fechaHoy()` de SIAP pasa a
-  usarlo. Nunca `CURRENT_DATE` en SQL para reglas de negocio.
-- Por defecto es el reloj del sistema. `RelojFijo` (fijar y avanzar, como `FakeTimeProvider`
-  de .NET) se usa en los tests y en el seed de demostración. El proveedor se elige **por
-  código**, no por variable de entorno: en producción no hay forma de fijarlo.
+- `Reloj` en `common/reloj/` (clase abstracta, también token de inyección) con `ahora()` y
+  `hoy()` (en `ZONA_HORARIA`) reemplaza toda lectura directa de la hora del sistema para
+  **fechas de negocio**: "no posterior a hoy", el periodo de un documento nuevo y la fecha por
+  defecto de los documentos. **`fechaHoy()` de SIAP no se porta** (decisión 76):
+  `date.utils` expone `fechaDe(instante)` (pura) y `Reloj.hoy()` = `fechaDe(ahora())`. Nunca
+  `CURRENT_DATE` en SQL para reglas de negocio.
+- `CommonModule` provee `RelojSistema` (la hora real). `RelojFijo` (`fijar(fecha)`,
+  `avanzar(dias)`; `AAAA-MM-DD` = mediodía de La Paz; como `FakeTimeProvider` de .NET) se
+  usa en los tests con `overrideProvider(Reloj).useValue(new RelojFijo('2026-05-15'))` y en el
+  seed de demostración. El proveedor se elige **por código**, no por variable de entorno: en
+  producción no hay forma de fijarlo.
 - **Fechas técnicas y de seguridad con la hora real**: `fecha_registro`, `fecha_anulacion`,
   bitácora, vigencia del JWT, bloqueo temporal y ventana TOTP. Por eso un documento de la demo
   con `fecha` 15 de mayo tiene `fecha_registro` de hoy: `fecha` es el hecho y `fecha_registro`
@@ -745,5 +783,9 @@ Paleta **definitiva** (decisión 23, mockup aprobado en A6):
 | 13 | Rangos `^` en `package.json` | Versiones exactas (`save-exact`) | Decisión 25 |
 | 14 | notiflix, moment, FontAwesome, PrimeNG | MatSnackBar, date-fns, Material Symbols, solo Material | Decisiones 4 y 34 |
 | 15 | `start:dev` con `ts-node-dev --respawn -r tsconfig-paths/register` | `nest start --watch` con `cross-env NODE_ENV=development` | `ts-node-dev` sin mantenimiento desde 2022; la CLI compila con `tsc` y reescribe los aliases, mismo camino que `start:prod` (B1) |
+| 16 | `typeorm` 0.3.20 (inyección SQL en `save`/`update`) | `typeorm` 0.3.31 | Parche de seguridad del mismo minor (decisión 74, B2) |
+| 17 | `BaseEntity` con `timestamp without time zone` | `timestamptz` | Decisión 75; en SIAP, L12 de `pendientes-siap.md` |
+| 18 | `fechaHoy()` lee `new Date()`; `Repository` filtrado a mano por institución | `Reloj` inyectable y `fechaDe()` pura; `NegocioRepository` con falla cerrado | Decisiones 61, 76 y 77 |
+| 19 | Sin plugin de Swagger en `nest-cli.json` | Plugin activo (`classValidatorShim`, `introspectComments`) | Decisión 78 |
 El inventario de lo que se porta, con sus dependencias ocultas, está en
 `docs/base-desde-siap.md` (corregido en A4).

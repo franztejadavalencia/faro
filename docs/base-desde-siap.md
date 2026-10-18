@@ -52,25 +52,29 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
 ### `common/`
 | Archivo de SIAP | Cat. | Cambio en FARO | Tarea |
 |---|---|---|---|
-| `entities/base.entity.ts` | = | — (regla 3) | B2 |
-| `entities/base-anulable.entity.ts` | ~ | Extiende `BaseNegocioEntity` (nueva) | B2 |
-| `services/request-context.service.ts` | ~ | Suma `idNegocio` y `obtenerIdNegocio()` | B2 |
-| `subscribers/auditoria.subscriber.ts` | ~ | Pone `id_negocio` del contexto al insertar y rechaza uno distinto (`architecture.md` §6) | B2 |
-| `interceptors/contexto-request.interceptor.ts` | ~ | Tipo de payload propio de `common`; suma `idNegocio` | B2 |
+| `entities/base.entity.ts` | ~ | `strict` (campos con `!`); `timestamptz` en las fechas técnicas (decisión 75); regla 3. Hecho en B2, con barrel `entities/index.ts` | B2 |
+| `entities/base-anulable.entity.ts` | ~ | Extiende `BaseNegocioEntity` (nueva); `fecha_anulacion` `timestamptz`. Hecho en B2 | B2 |
+| `services/request-context.service.ts` | ~ | Suma `idNegocio` y `obtenerIdNegocio()`. Hecho en B2 | B2 |
+| `subscribers/auditoria.subscriber.ts` | ~ | Pone `id_negocio` del contexto al insertar y rechaza uno distinto; en update rechaza otro negocio y cambiar el `id_negocio` (`architecture.md` §6, decisión 77); sin `any`. Hecho en B2 | B2 |
+| `interceptors/contexto-request.interceptor.ts` | ~ | Tipo de payload propio de `common` (`types/payload-token.ts`); suma `idNegocio`. Hecho en B2 | B2 |
 | `guards/jwt-auth.guard.ts` | ~ | Pasa a `seguridad/auth/guards/`; valida en cada request el estado del usuario y del negocio y `debe_cambiar_clave` (decisiones 30 y 48) | B4 |
 | `decorators/publico.decorator.ts` | = | — | B2 |
-| `common.module.ts` | ~ | Sin `imports: [AuthModule]`; los `APP_GUARD` se registran en `seguridad` | B2/B4 |
-| `dto/anular.dto.ts`, `incluir-anulados.dto.ts`, `motivo.dto.ts`, `notas.dto.ts` | = | — | B2 |
-| `utils/anulacion.util.ts` (+ `anulacion.util.spec.ts`) | ~ | `conUsuarioAnulacion()` sale de `common` (a `seguridad/usuario`); se conserva `AHORA_DEL_SERVIDOR` | B2 |
-| `utils/date.utils.ts` | = | + spec nuevo (`fechaHoy` con el proceso en UTC) | B2 |
-| `utils/math.utils.ts` | R | `redondearMonto` / `redondearCosto` con `Decimal` (§5) + spec | B2 |
-| `utils/error-message.ts` | R | `getPgErrorCode` se reutiliza en el filtro global (§10); `handleServiceError` no se porta | B2 |
-| `utils/repository.utils.ts` | R | Base de `NegocioRepository` (§6) + spec | B2 |
+| `common.module.ts` | ~ | Sin `imports: [AuthModule]`; los `APP_GUARD` se registran en `seguridad` (B4). Suma `Reloj`, `NegocioRepositoryFactory` y `APP_FILTER`. Hecho en B2 | B2/B4 |
+| `dto/anular.dto.ts`, `incluir-anulados.dto.ts`, `motivo.dto.ts`, `notas.dto.ts` | = | Solo `!` por `strict`. Hecho en B2 | B2 |
+| `utils/anulacion.util.ts` (+ `anulacion.util.spec.ts`) | ~ | **`conUsuarioAnulacion()` no se porta en B2** (usa `Usuario`): la escribe D6 contra `persona`/`usuario`, con un solo `IN`; se conserva `AHORA_DEL_SERVIDOR`. Spec sin el bloque de esa función. Hecho en B2 | B2 (D6) |
+| `utils/date.utils.ts` | ~ | **Sin `fechaHoy()`** (decisión 76): `fechaDe(instante)` pura + `Reloj.hoy()`; `fechaLegible` y `validateDateRange` iguales. Spec nuevo con el proceso en UTC. Hecho en B2 | B2 |
+| `utils/math.utils.ts` | R | `redondearMonto` / `redondearCosto` con `Decimal` y `ROUND_HALF_UP` explícito (§5) + spec; no se porta `calcularCostoParcial`. Hecho en B2 | B2 |
+| `utils/decimal.transformer.ts` | nuevo | `numeric` ↔ `Decimal` (§5); acepta los operadores de búsqueda (`MoreThan`, `Between`, `In`). Hecho en B2 | B2 |
+| `utils/error-message.ts` | R | `getPgErrorCode` se reutiliza en el filtro global (§10); `handleServiceError` no se porta. Hecho en B2 | B2 |
+| `utils/repository.utils.ts` | R | Reemplazado por `NegocioRepository` + `NegocioRepositoryFactory` (§6, decisión 77). Hecho en B2 | B2 |
+| — | nuevo | `reloj/` (`Reloj`, `RelojSistema`, `RelojFijo`; decisión 61), `filters/excepciones.filter.ts` (decisión 32), `errors/negocio-incorrecto.error.ts`. Hecho en B2 | B2 |
 | `filters/multer-exception.filter.ts` | ✗ | FARO no sube archivos en la preliminar | — |
 | `utils/carpeta-archivos.util.ts` (+ spec) | ✗ | Atado a documentos de SIAP | — |
 
-**Tests**: de `common/utils/` solo `anulacion.util` tiene spec en SIAP. B2 escribe los de
-`date.utils`, `math.utils`, `repository.utils` y del filtro de errores.
+**Tests**: de `common/utils/` solo `anulacion.util` tiene spec en SIAP. B2 escribió los de
+`date.utils`, `math.utils`, `decimal.transformer`, `error-message`, `Reloj`, `NegocioRepository`,
+`AuditoriaSubscriber`, `RequestContextService` y del filtro de errores, y un e2e de contexto
+(`test/contexto.e2e-spec.ts`).
 
 ### `seguridad/` y `abc/usuario`, `abc/permiso`
 | Archivo de SIAP | Cat. | Cambio en FARO | Tarea |

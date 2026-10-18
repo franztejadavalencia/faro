@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { validarEntorno, VariablesEntorno } from './config/env.validation';
 import { opcionesTypeOrm } from '@database/typeorm.config';
+import { CommonModule } from './common/common.module';
 import { SaludModule } from './salud/salud.module';
 
 @Module({
@@ -25,6 +26,7 @@ import { SaludModule } from './salud/salud.module';
         autoLoadEntities: true,
       }),
     }),
+    CommonModule,
     SaludModule,
   ],
 })

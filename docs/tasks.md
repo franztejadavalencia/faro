@@ -41,12 +41,13 @@ Backend (B) y frontend (F). Pueden avanzar en paralelo cuando haya contrato.
         `CORS_ORIGIN`), Jest unit + e2e contra `faro_test` con `TRUNCATE` entre suites ·
         `start:dev` levanta; `/api/docs` responde; `migration:run` corre en vacío; un e2e de
         humo pasa contra `faro_test` · cerrada 2026-10-17 (decisiones 64 a 73)
-- [ ] B2 · Portar `common/` (`base-desde-siap.md`): entidades base + `BaseNegocioEntity`,
+- [x] B2 · Portar `common/` (`base-desde-siap.md`): entidades base + `BaseNegocioEntity`,
         `RequestContextService` con `idNegocio`, `AuditoriaSubscriber`, `@Publico`, DTOs,
         `anulacion.util`, `date.utils`, `Reloj`/`RelojFijo` (decisión 61), `math.utils` con
         `Decimal`, `decimal.transformer`, `NegocioRepository`, filtro global de errores · specs
         de utils, transformer, `Reloj`, `NegocioRepository` y filtro (23505→409, 23514→400,
-        resto→500) en verde
+        resto→500) en verde · cerrada 2026-10-17 (decisiones 74 a 78; subió `typeorm` a
+        0.3.31, decisión 74)
 - [ ] B3 · `negocio` mínimo (id, nombre, estado) + `persona` + `usuario` + `bitacora` (con
         trigger de solo inserción) + migraciones + seed del admin de plataforma (clave desde
         `.env`) · migraciones suben y bajan; e2e: el trigger rechaza UPDATE/DELETE en
@@ -124,7 +125,9 @@ Backend `D` (dominio) y frontend `V` (vistas) (decisión 62). Cada V va después
         valor 0,00 (PPP y PEPS) + test de propiedades con semilla; la regla de orden rechaza
         una fecha anterior al último movimiento del producto
 - [ ] D6 · Inventario inicial y ajustes (`ajuste_inventario`) con kardex y asiento; anulación
-        (decisiones 55 y 56); kardex por producto y stock valorado con aviso de mínimo (Opus) ·
+        (decisiones 55 y 56); kardex por producto y stock valorado con aviso de mínimo; incluye
+        `conUsuarioAnulacion` contra `persona`/`usuario`, con un solo `IN` (no se portó en B2)
+        (Opus) ·
         e2e: inventario inicial → asiento Inventario/Capital con fecha `fecha_inicio`; merma y
         sobrante; anulación con asiento inverso; kardex con saldos correctos
 - [ ] D7 · Compras con kardex y asiento (con y sin factura, por régimen, medio de pago),

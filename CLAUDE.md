@@ -32,8 +32,11 @@ Las tareas se revisan fuera de esta sesión, así que **nada importante queda so
    implementa según las respuestas y pon `Estado: aplicando`. Toda respuesta que sea una
    decisión va también a `docs/decisiones.md`. Si surge una duda nueva, agrégala en
    `## Preguntas nuevas`, vuelve a `Estado: en revisión` y detente.
-4. **Cerrar.** Completa `## Resultado` (qué se hizo, tests y lint, mensaje de commit
-   propuesto), pon `Estado: cerrada` y marca la tarea en `docs/tasks.md`.
+4. **Cerrar.** Corre `npm audit --omit=dev` en cada app que cambió dependencias (o el
+   backend, si la tarea no las tocó) y completa `## Resultado` (qué se hizo, tests y lint,
+   resultado del audit, mensaje de commit propuesto), pon `Estado: cerrada` y marca la tarea en
+   `docs/tasks.md`. Un parche de seguridad del mismo minor se aplica solo si está en el plan de
+   la tarea (decisión 74).
 
 Una tarea muy pequeña (un typo, un ajuste de una línea) puede saltarse el paso 1 si el
 usuario lo dice explícitamente.

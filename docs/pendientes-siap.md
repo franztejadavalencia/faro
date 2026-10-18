@@ -1,7 +1,7 @@
 # Pendientes de SIAP encontrados desde FARO
 
-Errores y riesgos de `D:\SIAP` detectados al analizarlo como base de FARO (tareas A3, A4, A5 y
-B1). **No se corrigen desde FARO** (SIAP es solo lectura en las sesiones de FARO): cada punto se
+Errores y riesgos de `D:\SIAP` detectados al analizarlo como base de FARO (tareas A3, A4, A5, B1 y
+B2). **No se corrigen desde FARO** (SIAP es solo lectura en las sesiones de FARO): cada punto se
 resuelve en **su propia sesión de SIAP**, con el flujo de trabajo de ese proyecto.
 
 Cómo usar esta lista:
@@ -14,12 +14,12 @@ Cómo usar esta lista:
 
 | # | Problema | Dónde | Riesgo | Corrección sugerida | Origen | Estado |
 |---|---|---|---|---|---|---|
-| S1 | `typeorm` 0.3.20 con inyección SQL vía `repository.save` / `update` (GHSA-q2pj-6v73-8rgj), inyección en `migration:generate` y `uuid` vulnerable | `siap-backend/package.json` | Inyección SQL en operaciones de uso diario | Subir a **0.3.31** (parche del mismo minor, mismo cambio que FARO en B2) y correr todos los tests | B1 | Pendiente |
+| S1 | `typeorm` 0.3.20 con inyección SQL vía `repository.save` / `update` (GHSA-q2pj-6v73-8rgj, `<0.3.26`, aplica a PostgreSQL) e inyección en `migration:generate` (GHSA-2rp8-mm9q-fp49, `<0.3.31`); su `uuid` también | `siap-backend/package.json` | Inyección SQL en operaciones de uso diario | Subir a **0.3.31** (parche del mismo minor; FARO lo hizo en B2, decisión 74) y correr todos los tests. Ojo: desde 0.3.23 `update({}, …)` y `delete({})` con criterio vacío **lanzan error** en vez de afectar toda la tabla: buscar esas llamadas en SIAP antes de subir | B1, B2 | Pendiente |
 | S2 | Permisos validados **solo en el frontend**; el backend solo verifica el JWT | `core/guards/permiso-rol-usuario.guard.ts` (front); backend sin guard de permisos | Cualquier usuario autenticado puede llamar cualquier endpoint con Postman o curl | Guard de permisos en el backend por módulo y opción (como `@RequierePermiso` de FARO, decisión 38) | A3 | Pendiente |
 | S3 | Usuarios creados con clave fija `CLAVE_POR_DEFECTO = '1234'` | `abc/usuario/services/usuario.service.ts` | Cuentas nuevas con clave conocida | Clave temporal definida por quien crea el usuario + cambio obligatorio en el primer ingreso (FARO, decisión 48) | A4 | Pendiente |
 | S4 | `synchronize: true` y sin migraciones | `src/app.module.ts` | En producción, un cambio de entidad altera o borra columnas sin control | `synchronize: false` + migraciones (generar la migración inicial desde la base actual) | A3 | Pendiente |
 | S5 | `types.setTypeParser(1700, parseFloat)`: todo `numeric` pasa a `number` de punto flotante; `math.utils` solo con `toFixed(2)` | `src/main.ts`, `common/utils/math.utils.ts` | Errores de redondeo en montos y costos (costeo, APU, FIFO) | `decimal.js` con transformer de TypeORM (como FARO, decisión 28), empezando por los cálculos de dinero | A3 | Pendiente |
-| S6 | 17 vulnerabilidades en dependencias de producción (`npm audit --omit=dev`): `express`, `path-to-regexp`, `body-parser`, `qs`, `multer`, `lodash`, `js-yaml`, `file-type` | `siap-backend` | DoS, prototype pollution | Aplicar parches del mismo minor; el resto pide Nest 11 o 12: evaluarlo como migración aparte | B1 | Pendiente |
+| S6 | 17 vulnerabilidades en dependencias de producción (`npm audit --omit=dev`): `express`, `path-to-regexp`, `body-parser`, `qs`, `multer`, `lodash`, `js-yaml`, `file-type` | `siap-backend` | DoS, prototype pollution | Aplicar parches del mismo minor (decisión 74); el resto pide Nest 11 o 12: evaluarlo como migración aparte. En FARO, tras subir `typeorm`, quedan 15 (6 altas, 9 moderadas), todas de `@nestjs/*`, `express`, `multer`, `lodash`, `js-yaml` y el `uuid` de `@nestjs/typeorm`; SIAP puede variar | B1, B2 | Pendiente |
 
 ## Prioridad media (errores de comportamiento)
 
@@ -49,6 +49,8 @@ Cómo usar esta lista:
 | L9 | Tailwind no está configurado (solo llega como dependencia de `@angular/build`) aunque hay clases tipo Tailwind en 3 componentes | `siap-frontend` | Configurarlo o quitar esas clases | A3 | Pendiente |
 | L10 | Sin configuración de tests e2e en el backend | `siap-backend/test/` | `jest-e2e.json` + base de prueba (como FARO B1) | B1 | Pendiente |
 | L11 | `calcularFifo` y `construirKardex` sin test directo (solo `disponibleAlDia` tiene spec) y cálculos con `number` / `toFixed` | `abc/ejecucion-proyecto/utils/fifo.util.ts` | Tests directos; luego pasar a `decimal.js` (S5) | A4, A5 | Pendiente |
+| L12 | `fecha_registro`, `fecha_modificacion` y `fecha_anulacion` como `timestamp without time zone`: el valor leído depende de que el proceso de Node tenga la misma zona que la sesión de Postgres (`ecosystem.config.js` fija `TZ`) | `common/entities/base.entity.ts`, `base-anulable.entity.ts` | Fechas técnicas corridas si cambia la zona del proceso o del servidor | `timestamptz` (FARO, decisión 75); en SIAP exige una migración de datos que interprete los valores existentes en `America/La_Paz` | B2 | Pendiente |
+| L13 | `AuditoriaSubscriber` usa `any` en los eventos y no verifica nada más que el usuario; `common/guards/jwt-auth.guard.ts` castea `(request as any).usuarioActual` | `common/subscribers/`, `common/guards/` | Pérdida de tipos en el código de seguridad | Tipar el request (`RequestConUsuario`, como FARO en `common/types/payload-token.ts`) | B2 | Pendiente |
 
 ## CONTROLADOR (otro proyecto, mismo criterio)
 
