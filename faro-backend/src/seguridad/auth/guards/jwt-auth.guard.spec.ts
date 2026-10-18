@@ -6,9 +6,12 @@ import {
 import { Reflector } from '@nestjs/core';
 import { Repository } from 'typeorm';
 import { ES_PUBLICO } from '@common/decorators/publico.decorator';
-import { PayloadToken, RequestConUsuario } from '@common/types/payload-token';
+import { PayloadToken } from '@common/types/payload-token';
 import { Usuario } from '../../entities/usuario.entity';
 import { PERMITIDO_CON_CLAVE_TEMPORAL } from '../decorators/permitido-con-clave-temporal.decorator';
+import { SOLO_TOKEN_TEMPORAL_2FA } from '../decorators/solo-token-temporal-2fa.decorator';
+import { PayloadTokenTemporal } from '../services/token.service';
+import { RequestCon2fa } from '../types/request-2fa';
 import { TokenService } from '../services/token.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
@@ -30,6 +33,7 @@ function armar(opciones: {
   metadatos?: string[];
   fila?: Usuario | null;
   verificado?: PayloadToken | null;
+  temporal?: PayloadTokenTemporal | null;
   authorization?: string;
 }) {
   const metadatos = new Set(opciones.metadatos ?? []);
@@ -39,7 +43,14 @@ function armar(opciones: {
   const verificar = jest
     .fn()
     .mockReturnValue('verificado' in opciones ? opciones.verificado : payload);
-  const tokens = { verificar } as unknown as TokenService;
+  const verificarTemporal = jest
+    .fn()
+    .mockReturnValue(
+      'temporal' in opciones
+        ? opciones.temporal
+        : { idUsuario: 3, versionSesion: 1 },
+    );
+  const tokens = { verificar, verificarTemporal } as unknown as TokenService;
   const findOne = jest
     .fn()
     .mockResolvedValue('fila' in opciones ? opciones.fila : filaUsuario());
@@ -49,7 +60,7 @@ function armar(opciones: {
       authorization:
         'authorization' in opciones ? opciones.authorization : 'Bearer abc',
     },
-  } as RequestConUsuario;
+  } as RequestCon2fa;
   const contexto = {
     switchToHttp: () => ({ getRequest: () => request }),
     getHandler: () => undefined,
@@ -60,6 +71,7 @@ function armar(opciones: {
     contexto,
     request,
     verificar,
+    verificarTemporal,
     findOne,
   };
 }
@@ -153,5 +165,67 @@ describe('JwtAuthGuard', () => {
     });
     await expect(guard.canActivate(contexto)).resolves.toBe(true);
     expect(request.usuarioActual).toEqual(payload);
+  });
+
+  describe('rutas de la 2FA (@SoloTokenTemporal2fa)', () => {
+    it('con el token temporal deja usuario2fa y no abre sesión', async () => {
+      const { guard, contexto, request, verificar, verificarTemporal } = armar({
+        metadatos: [SOLO_TOKEN_TEMPORAL_2FA],
+      });
+      await expect(guard.canActivate(contexto)).resolves.toBe(true);
+      expect(verificarTemporal).toHaveBeenCalledWith('abc');
+      expect(verificar).not.toHaveBeenCalled();
+      expect(request.usuario2fa).toEqual({ idUsuario: 3 });
+      expect(request.usuarioActual).toBeUndefined();
+    });
+
+    it('401 con un token que no es temporal (p. ej. el de sesión)', async () => {
+      const { guard, contexto, findOne } = armar({
+        metadatos: [SOLO_TOKEN_TEMPORAL_2FA],
+        temporal: null,
+      });
+      await expect(guard.canActivate(contexto)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(findOne).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['el usuario está dado de baja', filaUsuario({ idEstado: 0 })],
+      ['la versión de sesión cambió', filaUsuario({ versionSesion: 2 })],
+      [
+        'el negocio está suspendido',
+        filaUsuario({
+          negocio: { idNegocio: 7, estado: 'SUSPENDIDO', idEstado: 1 },
+        } as Partial<Usuario>),
+      ],
+    ])('401 si %s', async (_texto, fila) => {
+      const { guard, contexto, request } = armar({
+        metadatos: [SOLO_TOKEN_TEMPORAL_2FA],
+        fila,
+      });
+      await expect(guard.canActivate(contexto)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(request.usuario2fa).toBeUndefined();
+    });
+
+    it('debe_cambiar_clave no la frena: la 2FA va antes', async () => {
+      const { guard, contexto } = armar({
+        metadatos: [SOLO_TOKEN_TEMPORAL_2FA],
+        fila: filaUsuario({ debeCambiarClave: true }),
+      });
+      await expect(guard.canActivate(contexto)).resolves.toBe(true);
+    });
+
+    it('en una ruta normal el token temporal no se mira', async () => {
+      const { guard, contexto, verificarTemporal } = armar({
+        verificado: null,
+      });
+      await expect(guard.canActivate(contexto)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(verificarTemporal).not.toHaveBeenCalled();
+    });
   });
 });

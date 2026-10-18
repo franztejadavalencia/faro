@@ -26,6 +26,7 @@ import { Persona } from './persona.entity';
 })
 @Check('ck_usuario_intentos_fallidos', `"intentos_fallidos" >= 0`)
 @Check('ck_usuario_version_sesion', `"version_sesion" >= 0`)
+@Check('ck_usuario_totp', `NOT "totp_activo" OR "totp_secreto" IS NOT NULL`)
 export class Usuario extends BaseNegocioOpcionalEntity {
   @PrimaryGeneratedColumn({
     name: 'id_usuario',
@@ -61,8 +62,10 @@ export class Usuario extends BaseNegocioOpcionalEntity {
   debeCambiarClave!: boolean;
 
   /**
-   * El texto **cifrado** del secreto TOTP, nunca el secreto (el formato lo
-   * define B5 con `TOTP_CLAVE_CIFRADO`). `null` hasta que se inicia la 2FA.
+   * El texto **cifrado** del secreto TOTP, nunca el secreto: AES-256-GCM con
+   * `TOTP_CLAVE_CIFRADO` y AAD por usuario, formato `v1:<iv>:<etiqueta>:<cifrado>`
+   * (`utils/cifrado-totp.ts`). `null` hasta configurar la 2FA; con
+   * `totp_activo = true` es obligatorio (`ck_usuario_totp`).
    */
   @Column({ name: 'totp_secreto', type: 'text', nullable: true, select: false })
   totpSecreto!: string | null;

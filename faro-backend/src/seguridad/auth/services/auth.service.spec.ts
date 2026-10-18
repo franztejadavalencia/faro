@@ -10,6 +10,7 @@ import { BitacoraService } from '../../services/bitacora.service';
 import { claveCoincide, hashearClave } from '../../utils/clave';
 import { MENSAJE_CREDENCIALES_INVALIDAS } from '../constants/auth.constants';
 import { AuthService } from './auth.service';
+import { IntentosService } from './intentos.service';
 import { TokenService } from './token.service';
 
 jest.mock('../../utils/clave', () => ({
@@ -29,6 +30,7 @@ function usuario(cambios: Partial<Usuario> = {}): Usuario {
     idEstado: 1,
     debeCambiarClave: false,
     versionSesion: 0,
+    totpActivo: false,
     intentosFallidos: 0,
     bloqueadoHasta: null,
     persona: { nombre: 'Ana', paterno: 'Pérez', materno: null },
@@ -67,6 +69,7 @@ function armar(fila: Usuario | null, intentosTrasFallo?: number) {
     save,
   } as unknown as Repository<Usuario>;
   const firmar = jest.fn().mockReturnValue('jwt');
+  const firmarTemporal = jest.fn().mockReturnValue('jwt-2fa');
   const bitacora = {
     registrar: jest.fn().mockResolvedValue(undefined),
     registrarAcceso: jest.fn().mockResolvedValue(undefined),
@@ -74,16 +77,27 @@ function armar(fila: Usuario | null, intentosTrasFallo?: number) {
   const contexto = new RequestContextService();
   const servicio = new AuthService(
     usuarios,
-    { firmar } as unknown as TokenService,
+    { firmar, firmarTemporal } as unknown as TokenService,
     bitacora as unknown as BitacoraService,
     contexto,
+    new IntentosService(usuarios, bitacora as unknown as BitacoraService),
   );
   const eventos = () =>
     bitacora.registrarAcceso.mock.calls.map(
       ([evento, , detalle]: [string, unknown, { motivo?: string }]) =>
         detalle?.motivo ? `${evento}:${detalle.motivo}` : evento,
     );
-  return { servicio, qb, execute, save, firmar, bitacora, contexto, eventos };
+  return {
+    servicio,
+    qb,
+    execute,
+    save,
+    firmar,
+    firmarTemporal,
+    bitacora,
+    contexto,
+    eventos,
+  };
 }
 
 const credenciales = { usuario: ' Ana ', clave: 'clave-correcta' };
@@ -240,11 +254,54 @@ describe('AuthService.login', () => {
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
-  it('admin de plataforma: negocio null', async () => {
+  it('admin de plataforma sin 2FA: CONFIGURAR_2FA con token temporal, sin sesión', async () => {
     coincide.mockResolvedValue(true);
-    const { servicio } = armar(usuario({ idNegocio: null, negocio: null }));
-    const respuesta = await servicio.login(credenciales);
-    expect(respuesta.usuario.negocio).toBeNull();
+    const { servicio, firmar, firmarTemporal, eventos } = armar(
+      usuario({ idNegocio: null, negocio: null, versionSesion: 4 }),
+    );
+    await expect(servicio.login(credenciales)).resolves.toEqual({
+      estado: 'CONFIGURAR_2FA',
+      tokenTemporal: 'jwt-2fa',
+    });
+    expect(firmarTemporal).toHaveBeenCalledWith({
+      idUsuario: 3,
+      versionSesion: 4,
+    });
+    expect(firmar).not.toHaveBeenCalled();
+    expect(eventos()).toEqual(['LOGIN_2FA_PENDIENTE']);
+  });
+
+  it('con la 2FA activa (admin o dueño): VERIFICAR_2FA', async () => {
+    coincide.mockResolvedValue(true);
+    for (const fila of [
+      usuario({ totpActivo: true }),
+      usuario({ idNegocio: null, negocio: null, totpActivo: true }),
+    ]) {
+      const { servicio, firmar } = armar(fila);
+      await expect(servicio.login(credenciales)).resolves.toEqual({
+        estado: 'VERIFICAR_2FA',
+        tokenTemporal: 'jwt-2fa',
+      });
+      expect(firmar).not.toHaveBeenCalled();
+    }
+  });
+
+  it('con 2FA pendiente la clave correcta no reinicia el contador', async () => {
+    coincide.mockResolvedValue(true);
+    const { servicio, execute } = armar(
+      usuario({ totpActivo: true, intentosFallidos: 3 }),
+    );
+    await servicio.login(credenciales);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('dueño sin 2FA: OK como siempre (es opcional)', async () => {
+    coincide.mockResolvedValue(true);
+    const { servicio } = armar(usuario({ totpActivo: false }));
+    await expect(servicio.login(credenciales)).resolves.toMatchObject({
+      estado: 'OK',
+      token: 'jwt',
+    });
   });
 });
 

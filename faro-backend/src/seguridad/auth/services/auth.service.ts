@@ -11,7 +11,6 @@ import { Repository, SelectQueryBuilder } from 'typeorm';
 import { RequestContextService } from '@common/services/request-context.service';
 import {
   EVENTOS_BITACORA,
-  EventoBitacora,
   MAX_USUARIO_EN_BITACORA,
   MOTIVOS_LOGIN_FALLIDO,
 } from '../../constants/eventos-bitacora';
@@ -20,18 +19,18 @@ import { ActorAcceso, BitacoraService } from '../../services/bitacora.service';
 import { claveCoincide, errorDeClave, hashearClave } from '../../utils/clave';
 import { nombreCompleto } from '../../utils/nombre-completo';
 import {
-  MAX_INTENTOS_FALLIDOS,
   MENSAJE_CREDENCIALES_INVALIDAS,
   MENSAJE_SESION_INVALIDA,
-  MINUTOS_BLOQUEO,
 } from '../constants/auth.constants';
 import { CambiarClaveDto } from '../dto/cambiar-clave.dto';
 import { LoginDto } from '../dto/login.dto';
-import { RespuestaLoginDto } from '../dto/respuesta-login.dto';
+import { RespuestaLogin, RespuestaSesionDto } from '../dto/respuesta-login.dto';
+import { estaBloqueado, IntentosService } from './intentos.service';
 import { TokenService } from './token.service';
 
 /**
- * Login, cambio de clave y bloqueo temporal (decisiones 48, 51 y 53). Lee
+ * Login, cambio de clave y bloqueo temporal (decisiones 48, 51 y 53); con 2FA
+ * pendiente, el login entrega solo el token temporal (decisión 50). Lee
  * `usuario` con un `Repository` normal: el login no tiene sesión ni negocio en
  * el contexto (busca por el login, único en la plataforma) y el cambio de clave
  * busca por el `idUsuario` del token.
@@ -53,9 +52,10 @@ export class AuthService {
     private readonly tokens: TokenService,
     private readonly bitacora: BitacoraService,
     private readonly contexto: RequestContextService,
+    private readonly intentos: IntentosService,
   ) {}
 
-  async login(dto: LoginDto): Promise<RespuestaLoginDto> {
+  async login(dto: LoginDto): Promise<RespuestaLogin> {
     const usuario = await this.buscar((qb) =>
       qb
         .where('lower(u.usuario) = lower(:usuario)', {
@@ -87,7 +87,7 @@ export class AuthService {
       await this.falloDeLogin(actor, MOTIVOS_LOGIN_FALLIDO.BLOQUEADO);
     }
     if (!coincide) {
-      await this.sumarFallo(actor, EVENTOS_BITACORA.LOGIN_FALLIDO, {
+      await this.intentos.sumarFallo(actor, EVENTOS_BITACORA.LOGIN_FALLIDO, {
         motivo: MOTIVOS_LOGIN_FALLIDO.CLAVE_INCORRECTA,
       });
       throw new UnauthorizedException(MENSAJE_CREDENCIALES_INVALIDAS);
@@ -100,20 +100,35 @@ export class AuthService {
       await this.falloDeLogin(actor, MOTIVOS_LOGIN_FALLIDO.NEGOCIO_SUSPENDIDO);
     }
 
-    if (usuario.intentosFallidos > 0 || usuario.bloqueadoHasta !== null) {
-      await this.usuarios
-        .createQueryBuilder()
-        .update(Usuario)
-        .set({ intentosFallidos: 0, bloqueadoHasta: null })
-        .where('id_usuario = :id', { id: usuario.idUsuario })
-        .execute();
+    const estado2fa = usuario.totpActivo
+      ? 'VERIFICAR_2FA'
+      : requiere2fa(usuario)
+        ? 'CONFIGURAR_2FA'
+        : null;
+    if (estado2fa) {
+      // Sin reiniciar el contador: si la clave correcta lo pusiera en 0, quien
+      // la sepa probaría 4 códigos por login sin bloquearse nunca.
+      await this.bitacora.registrarAcceso(
+        EVENTOS_BITACORA.LOGIN_2FA_PENDIENTE,
+        actor,
+        { estado: estado2fa },
+      );
+      return {
+        estado: estado2fa,
+        tokenTemporal: this.tokens.firmarTemporal({
+          idUsuario: usuario.idUsuario,
+          versionSesion: usuario.versionSesion,
+        }),
+      };
     }
+
+    await this.intentos.reiniciar(usuario);
     await this.bitacora.registrarAcceso(EVENTOS_BITACORA.LOGIN_OK, actor);
-    return this.respuesta(usuario);
+    return this.respuestaSesion(usuario);
   }
 
   /** El usuario sale del token (contexto), nunca de la ruta ni del body. */
-  async cambiarClave(dto: CambiarClaveDto): Promise<RespuestaLoginDto> {
+  async cambiarClave(dto: CambiarClaveDto): Promise<RespuestaSesionDto> {
     const idUsuario = this.contexto.obtenerIdUsuario();
     const usuario =
       idUsuario === undefined
@@ -141,9 +156,13 @@ export class AuthService {
     }
     // 400 y no 401: un 401 cerraría la sesión en el frontend (decisión 47).
     if (!(await claveCoincide(dto.claveActual, usuario.clave))) {
-      await this.sumarFallo(actor, EVENTOS_BITACORA.CAMBIO_CLAVE_FALLIDO, {
-        motivo: MOTIVOS_LOGIN_FALLIDO.CLAVE_INCORRECTA,
-      });
+      await this.intentos.sumarFallo(
+        actor,
+        EVENTOS_BITACORA.CAMBIO_CLAVE_FALLIDO,
+        {
+          motivo: MOTIVOS_LOGIN_FALLIDO.CLAVE_INCORRECTA,
+        },
+      );
       throw new BadRequestException('La clave actual no es correcta.');
     }
     if (dto.claveNueva === dto.claveActual) {
@@ -158,7 +177,7 @@ export class AuthService {
     usuario.versionSesion += 1;
     await this.usuarios.save(usuario);
     await this.bitacora.registrar(EVENTOS_BITACORA.CAMBIO_CLAVE);
-    return this.respuesta(usuario);
+    return this.respuestaSesion(usuario);
   }
 
   /** Usuario con su clave, persona y negocio. */
@@ -188,55 +207,8 @@ export class AuthService {
     throw new UnauthorizedException(MENSAJE_CREDENCIALES_INVALIDAS);
   }
 
-  /**
-   * Suma un fallo en **un solo** `UPDATE` (peticiones en paralelo no leen un
-   * contador viejo). Al llegar a `MAX_INTENTOS_FALLIDOS` pone `bloqueado_hasta`
-   * con la hora de la base (dato de seguridad, hora real) y vuelve el contador a
-   * 0. Una cuenta ya bloqueada no suma. Un QueryBuilder no pasa por
-   * `AuditoriaSubscriber`: no hay actor autenticado y el hecho queda en la
-   * bitácora.
-   */
-  private async sumarFallo(
-    actor: ActorAcceso,
-    evento: EventoBitacora,
-    detalle: Record<string, unknown>,
-  ): Promise<void> {
-    const llega = 'intentos_fallidos + 1 >= :maximo';
-    const resultado = await this.usuarios
-      .createQueryBuilder()
-      .update(Usuario)
-      .set({
-        intentosFallidos: () =>
-          `CASE WHEN ${llega} THEN 0 ELSE intentos_fallidos + 1 END`,
-        bloqueadoHasta: () =>
-          `CASE WHEN ${llega} THEN now() + make_interval(mins => :minutos) ELSE NULL END`,
-      })
-      .where('id_usuario = :id', { id: actor.idUsuario })
-      .andWhere('(bloqueado_hasta IS NULL OR bloqueado_hasta <= now())')
-      .setParameters({
-        maximo: MAX_INTENTOS_FALLIDOS,
-        minutos: MINUTOS_BLOQUEO,
-      })
-      // Texto y no arreglo: con arreglo TypeORM espera nombres de propiedad.
-      .returning('intentos_fallidos')
-      .execute();
-    const filas = resultado.raw as { intentos_fallidos: number }[];
-    const intentos = filas[0]?.intentos_fallidos;
-
-    await this.bitacora.registrarAcceso(evento, actor, {
-      ...detalle,
-      ...(intentos === undefined ? {} : { intentos }),
-    });
-    if (intentos === 0) {
-      await this.bitacora.registrarAcceso(
-        EVENTOS_BITACORA.BLOQUEO_CUENTA,
-        actor,
-        { minutos: MINUTOS_BLOQUEO },
-      );
-    }
-  }
-
-  private respuesta(usuario: Usuario): RespuestaLoginDto {
+  /** Sesión abierta (§11): la usa también la 2FA al pasar el segundo factor. */
+  respuestaSesion(usuario: Usuario): RespuestaSesionDto {
     return {
       estado: 'OK',
       token: this.tokens.firmar({
@@ -260,10 +232,10 @@ export class AuthService {
   }
 }
 
-/** Bloqueo vigente según la hora real (decisión 61: dato de seguridad). */
-function estaBloqueado(usuario: Usuario): boolean {
-  return (
-    usuario.bloqueadoHasta !== null &&
-    usuario.bloqueadoHasta.getTime() > Date.now()
-  );
+/**
+ * 2FA obligatoria (decisión 50): el admin de plataforma (sin negocio). Para el
+ * dueño es opcional; la activa él desde su sesión (B7).
+ */
+function requiere2fa(usuario: Usuario): boolean {
+  return usuario.idNegocio === null;
 }

@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/** B5 agrega `CONFIGURAR_2FA` y `VERIFICAR_2FA` (sin token de sesión). */
-export const ESTADOS_LOGIN = ['OK'] as const;
-export type EstadoLogin = (typeof ESTADOS_LOGIN)[number];
+/** Estados del login con 2FA pendiente: traen solo el token temporal. */
+export const ESTADOS_2FA = ['CONFIGURAR_2FA', 'VERIFICAR_2FA'] as const;
+export type Estado2fa = (typeof ESTADOS_2FA)[number];
 
 export class NegocioSesionDto {
   id!: number;
@@ -32,10 +32,10 @@ export class PermisoSesionDto {
   opcion!: string;
 }
 
-/** Contrato de `architecture.md` §11. */
-export class RespuestaLoginDto {
-  @ApiProperty({ enum: ESTADOS_LOGIN, example: 'OK' })
-  estado!: EstadoLogin;
+/** Sesión abierta: contrato de `architecture.md` §11. */
+export class RespuestaSesionDto {
+  @ApiProperty({ enum: ['OK'], example: 'OK' })
+  estado!: 'OK';
 
   /** JWT de sesión (12 h). Va en `Authorization: Bearer …`. */
   token!: string;
@@ -50,3 +50,19 @@ export class RespuestaLoginDto {
   @ApiProperty({ type: [PermisoSesionDto], example: [] })
   permisos!: PermisoSesionDto[];
 }
+
+/**
+ * Clave correcta con 2FA pendiente (decisión 50): sin sesión ni datos del
+ * usuario, solo el token temporal para `/api/auth/2fa/*`.
+ */
+export class RespuestaDosFactoresDto {
+  /** `CONFIGURAR_2FA`: falta enrolar (admin). `VERIFICAR_2FA`: falta el código. */
+  @ApiProperty({ enum: ESTADOS_2FA, example: 'VERIFICAR_2FA' })
+  estado!: Estado2fa;
+
+  /** JWT de 5 min con `proposito: '2fa'`; solo sirve en `/api/auth/2fa/*`. */
+  tokenTemporal!: string;
+}
+
+/** Respuesta del login: unión discriminada por `estado`. */
+export type RespuestaLogin = RespuestaSesionDto | RespuestaDosFactoresDto;

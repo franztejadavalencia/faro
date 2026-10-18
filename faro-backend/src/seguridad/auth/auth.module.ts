@@ -6,8 +6,12 @@ import { VariablesEntorno } from '../../config/env.validation';
 import { SeguridadModule } from '../seguridad.module';
 import { ALGORITMO_TOKEN, VIGENCIA_TOKEN } from './constants/auth.constants';
 import { AuthController } from './controllers/auth.controller';
+import { DosFactoresController } from './controllers/dos-factores.controller';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthService } from './services/auth.service';
+import { CifradoTotpService } from './services/cifrado-totp.service';
+import { DosFactoresService } from './services/dos-factores.service';
+import { IntentosService } from './services/intentos.service';
 import { TokenService } from './services/token.service';
 
 @Module({
@@ -22,10 +26,13 @@ import { TokenService } from './services/token.service';
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, DosFactoresController],
   providers: [
     AuthService,
     TokenService,
+    IntentosService,
+    CifradoTotpService,
+    DosFactoresService,
     // Guard global; B6 registra `PermisoGuard` después de este.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],

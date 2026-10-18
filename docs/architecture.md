@@ -35,7 +35,9 @@ Se fijan **exactas**, sin `^` ni `~`, con `save-exact=true` en el `.npmrc` de ca
 | dotenv | 16.4.5 (declarada como dependencia directa; en SIAP llega transitiva) |
 | rxjs | 7.8.1 |
 | decimal.js | nueva en FARO: **10.6.0**, instalada en B2 junto con el transformer y `math.utils` que la usan. Se importa como `import { Decimal } from 'decimal.js'` (export con nombre; el `tsconfig` no tiene `esModuleInterop`) |
-| otplib / qrcode | nuevas en FARO, a evaluar al implementar la 2FA (P, decisión 50); versión exacta aquí al instalarlas |
+| @otplib/totp, @otplib/core, @otplib/uri, @otplib/plugin-crypto-node | **13.5.0** (B5, decisión 94). `@otplib/totp` arrastra `@otplib/hotp` 13.5.0. **No** el paquete `otplib`: sus dependencias `@scure/base` 2 y `@noble/hashes` 2 son solo ESM y Jest 29 no las carga. Se usan desde `seguridad/utils/totp.ts` |
+| @scure/base | **1.2.6** (B5): base32 de la 2FA vía `createBase32Plugin` de `@otplib/core`; última 1.x, CommonJS + ESM |
+| qrcode / @types/qrcode | **1.5.4** / 1.5.6 (dev) (B5): el QR de la 2FA como PNG en data URL |
 | typescript | 5.6.3 |
 | jest / supertest / ts-jest | 29.7.0 / 7.0.0 / 29.2.5 |
 | eslint / prettier | 8.57.1 / 3.5.3 |
@@ -106,6 +108,17 @@ tarea que lo instala.
   proxy (nginx) o `@nestjs/throttler` sobre `POST /api/auth/*`. Con un proxy delante, la IP real
   solo se ve con `TRUST_PROXY` configurado (decisión 51); si no, todo el tráfico cuenta como una
   sola IP.
+- **Pendiente para el despliegue: enrolar la 2FA del admin enseguida** (decisión 95). Hasta que
+  el admin enrola, su clave sola permite configurar la 2FA (pasa en todo primer enrolamiento).
+  Tras `seed:admin`, el admin entra y enrola **inmediatamente**; la bitácora registra
+  `CONFIGURAR_2FA` y `ACTIVACION_2FA` con la IP para poder revisarlo.
+- **Pendiente para el despliegue: restablecer la 2FA del admin a mano** (decisión 97; D14 lo hace
+  por API para el dueño). Si el admin pierde el teléfono y los códigos de respaldo, en una sola
+  transacción sobre su fila: `totp_activo = false`, `totp_secreto = NULL`,
+  `totp_ultimo_paso = NULL`, borrar sus filas de `usuario_codigo_respaldo`,
+  `version_sesion = version_sesion + 1` (cierra sus sesiones) y una fila en `bitacora`
+  (`id_negocio` nulo, su `id_usuario`, `detalle` con el motivo y quién lo hizo). En el
+  siguiente login vuelve a `CONFIGURAR_2FA`.
 - Variables de entorno en `faro-backend/`:
 
   | Archivo | Uso | Git |
@@ -125,7 +138,7 @@ tarea que lo instala.
   DB_USER=postgres
   DB_PASSWORD=cambiar
   JWT_SECRET=
-  TOTP_CLAVE_CIFRADO=cambiar
+  TOTP_CLAVE_CIFRADO=
   CORS_ORIGIN=http://localhost:4200
   TRUST_PROXY=
   SWAGGER=
@@ -136,15 +149,20 @@ tarea que lo instala.
   - `JWT_SECRET` (decisión 90): **mínimo 32 caracteres**; vacío o corto, la app no arranca. Va
     vacío en `.env.example` para que nadie copie un valor conocido. Se genera con
     `node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"` (64
-    caracteres, 384 bits). B5 aplica la misma regla a `TOTP_CLAVE_CIFRADO`.
+    caracteres, 384 bits).
+  - `TOTP_CLAVE_CIFRADO` (B5, decisión 98): **obligatoria**, base64 de exactamente 32 bytes
+    (AES-256); vacía o mal formada, la app no arranca. Vacía en `.env.example`; una distinta por
+    entorno, la genera el dueño del proyecto con
+    `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. **Perderla o
+    cambiarla deja ilegibles los secretos TOTP** (todos los usuarios con 2FA tendrían que enrolar
+    de nuevo): en producción va respaldada fuera del servidor, junto con `JWT_SECRET`.
   - `src/config/env.validation.ts` valida el `.env` al arrancar (app, CLI de migraciones y e2e):
     si una variable falta o no cumple, la app no arranca y dice cuál.
   - `CORS_ORIGIN`: uno o varios orígenes separados por coma.
   - `TRUST_PROXY`: vacío = sin proxy (`request.ip`); con valor va a `trust proxy` de Express
     (número de proxies, `loopback`, IPs o subredes). `true` y `false` se rechazan (decisión 51).
   - `SWAGGER`: solo cuenta en `production` (ver abajo).
-  - `TOTP_CLAVE_CIFRADO` es opcional hasta B5. Las variables de tareas futuras (`DEMO_CLAVE` en D15)
-    las agrega cada tarea.
+  - Las variables de tareas futuras (`DEMO_CLAVE` en D15) las agrega cada tarea.
   - `ADMIN_USUARIO`, `ADMIN_CLAVE` y `ADMIN_NOMBRE` (B3): opcionales para la app, las exige solo
     `npm run seed:admin`. `ADMIN_CLAVE`: mínimo 8 caracteres y máximo 72 **bytes** (bcrypt ignora el
     resto); vacía en `.env.example` (B4: un valor de ejemplo sería una clave conocida). El admin se siembra con un script, no con una migración (decisión 82): es idempotente
@@ -469,12 +487,13 @@ erDiagram
   `clave` (bcrypt, `select: false`), `id_persona` (obligatorio), `id_rol_usuario` (**llega con
   B6**, que crea el rol de plataforma, se lo asigna al admin y recién entonces pone `NOT NULL` y
   la FK; decisión 85), `debe_cambiar_clave`, `totp_secreto` (`text`, `select: false`: guarda el
-  texto **cifrado**, nunca el secreto; el formato lo define B5), `totp_activo`, `totp_ultimo_paso`
-  (antirreúso), `intentos_fallidos` y `bloqueado_hasta` (bloqueo temporal, decisión 53) y `version_sesion` (B4, va en el JWT; decisión 87).
+  texto **cifrado**, nunca el secreto: AES-256-GCM con `TOTP_CLAVE_CIFRADO`, AAD `usuario:<id>`,
+  formato `v1:<iv>:<etiqueta>:<cifrado>`; decisión 98), `totp_activo` (CHECK `ck_usuario_totp`:
+  activo exige secreto, B5), `totp_ultimo_paso` (antirreúso), `intentos_fallidos` y `bloqueado_hasta` (bloqueo temporal, decisión 53) y `version_sesion` (B4, va en el JWT; decisión 87).
   - **Excepción a §4**: el login es **único en toda la plataforma**, no por negocio, porque el
     login no pide el negocio. Índice único sobre `lower(usuario)` con `id_estado = 1`.
   - `usuario_codigo_respaldo (id_usuario, hash, usado_en, fecha_registro)`: códigos de respaldo de la 2FA, de
-    un solo uso (P, decisión 50).
+    un solo uso (P, decisión 50): 10 por activación, `hash` con bcrypt costo 12 (decisión 96).
 - `rol_usuario`: `id_negocio` (null en plataforma), `nombre`, `descripcion` y `es_fijo`. Único
   `(id_negocio, nombre)`. El rol **Dueño** (`es_fijo = true`) viene de la seed con todos los
   permisos y el servicio rechaza editarlo o quitarlo (decisión 44).
@@ -675,7 +694,8 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
 
 ## 11. Auth y permisos (decisión 22)
 
-- `POST /api/auth/login` (público; implementado en B4):
+- `POST /api/auth/login` (público; B4, con 2FA desde B5). Respuesta: **unión discriminada por
+  `estado`** (Swagger `oneOf` + `discriminator`; decisión 95). Con `estado: "OK"`, la sesión:
   ```json
   {
     "estado": "OK",
@@ -696,18 +716,34 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
   hash ficticio si el usuario no existe), para que el tiempo no revele qué cuentas existen.
   - `usuario.nombre` sale de `nombreCompleto(persona)` (decisión 43).
   - La respuesta incluye `usuario.debeCambiarClave` (decisión 48).
-  - La respuesta lleva `estado`: `OK` (trae el JWT), `CONFIGURAR_2FA` o `VERIFICAR_2FA`
-    (P, decisión 50). En los dos últimos no trae el JWT, sino un **token temporal** de 5 min
-    con `proposito: '2fa'` que el guard solo acepta en `POST /api/auth/2fa/configurar` y
-    `POST /api/auth/2fa/verificar`. Ninguna de esas rutas recibe `idUsuario`: el usuario sale
-    del token temporal.
-  - `configurar` (solo si `totp_activo = false`): el backend genera el secreto, lo guarda
-    cifrado como pendiente y devuelve la URI `otpauth://` (emisor "FARO") para el QR. El
-    secreto nunca vuelve desde el cliente. `verificar` con el primer código lo activa y
-    devuelve los 10 códigos de respaldo (se muestran una sola vez).
-  - `verificar` acepta el código de 6 dígitos (±1 paso de 30 s, rechaza un paso ya usado con
-    `totp_ultimo_paso`) o un código de respaldo, y devuelve la respuesta de login completa.
-    `totp_secreto` se cifra con `TOTP_CLAVE_CIFRADO` de `.env`.
+  - **2FA** (P, decisiones 50, 94 a 98; B5). Con la clave correcta y el negocio activo:
+    `totp_activo = true` → `{ "estado": "VERIFICAR_2FA", "tokenTemporal": "…" }`; sin 2FA activa
+    y obligatoria (**admin de plataforma**, `id_negocio` nulo) →
+    `{ "estado": "CONFIGURAR_2FA", "tokenTemporal": "…" }`; si no, `OK`. Sin sesión ni datos del
+    usuario. El **token temporal** es un JWT de 5 min con `{ idUsuario, versionSesion,
+    proposito: '2fa' }`; el guard lo acepta **solo** en las rutas `@SoloTokenTemporal2fa()`
+    (`POST /api/auth/2fa/configurar` y `/verificar`), que a su vez rechazan el de sesión.
+    Ninguna recibe `idUsuario`: sale del token (`@Usuario2fa()`). Con 2FA pendiente, la clave
+    correcta **no** reinicia `intentos_fallidos` (se reinicia al pasar el segundo factor) y la
+    bitácora registra `LOGIN_2FA_PENDIENTE`. La 2FA va antes del cambio de clave forzado: el
+    guard no exige `debe_cambiar_clave` con el token temporal.
+  - `POST /api/auth/2fa/configurar` (sin body; 409 si `totp_activo = true`): genera un secreto
+    de 20 bytes, lo guarda **cifrado** como pendiente y responde
+    `{ "qr": "data:image/png;base64,…", "uri": "otpauth://totp/FARO:<usuario>?secret=…&issuer=FARO",
+    "claveManual": "ABCD EFGH …" }`. Repetirlo reemplaza el secreto pendiente. El secreto nunca
+    vuelve desde el cliente. Bitácora `CONFIGURAR_2FA`.
+  - `POST /api/auth/2fa/verificar` `{ "codigo": "123456" | "ABCDE-FGHIJ" }`: TOTP de 6 dígitos
+    (SHA-1, 30 s, ±1 paso; un paso `<= totp_ultimo_paso` se rechaza con un `UPDATE` atómico) o
+    un código de respaldo (solo con la 2FA activa; un solo uso, atómico). Responde la sesión
+    (`OK`). El **primer** código con la 2FA pendiente la activa en una transacción: sube
+    `version_sesion` (el token temporal usado deja de servir), reemplaza los códigos y agrega
+    `codigosRespaldo` (10, se muestran una sola vez). Fallo → **401** "Credenciales inválidas",
+    suma en `intentos_fallidos` y `VERIFICACION_2FA_FALLIDA` con `detalle.motivo`
+    (`CODIGO_INCORRECTO`, `CODIGO_REUSADO`, `SIN_CONFIGURAR`, `BLOQUEADO`). Éxito → `LOGIN_OK`
+    con `detalle.metodo` (`TOTP` | `RESPALDO`, con `restantes`) o `ACTIVACION_2FA`.
+  - TOTP siempre con la **hora real** (decisión 61); otplib en `seguridad/utils/totp.ts`.
+  - La 2FA opcional del dueño (activar, desactivar con clave + código, regenerar códigos) llega
+    con B7 y "restablecer 2FA" con D14 (decisión 97).
   - **Bloqueo temporal** (decisión 53): fallos de clave y de código suman en
     `intentos_fallidos`; con 5 seguidos, `bloqueado_hasta = ahora + 15 min`. El mensaje es
     siempre "Credenciales inválidas"; el motivo real va a la bitácora. El dueño (para sus
@@ -720,7 +756,8 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
   - Todo login, correcto o fallido, se registra en `bitacora` (decisión 51) con
     `BitacoraService.registrarAcceso` (decisión 88): `LOGIN_OK`, `LOGIN_FALLIDO` con
     `detalle.motivo` (`USUARIO_INEXISTENTE`, `BLOQUEADO`, `CLAVE_INCORRECTA`,
-    `NEGOCIO_SUSPENDIDO`) y `BLOQUEO_CUENTA`. Nunca la clave ni el token (decisión 93).
+    `NEGOCIO_SUSPENDIDO`) y `BLOQUEO_CUENTA`. Nunca la clave ni el token (decisión 93), ni
+    el secreto TOTP, la `uri` o un código (B5).
 - `POST /api/auth/cambiar-clave` (B4, decisión 89): `{ claveActual, claveNueva }`, con el
   usuario del **token** (no de la ruta). La nueva cumple `errorDeClave()` y es distinta de la
   actual. Clave actual incorrecta → 400 y suma intento (`CAMBIO_CLAVE_FALLIDO`; al 5.º,

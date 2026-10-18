@@ -62,4 +62,42 @@ describe('TokenService', () => {
   ])('rechaza un payload incompleto: %s', (_texto, incompleto) => {
     expect(tokens.verificar(jwt.sign(incompleto))).toBeNull();
   });
+
+  describe('token temporal de la 2FA', () => {
+    const temporal = { idUsuario: 3, versionSesion: 2 };
+
+    it('firma y verifica, con proposito 2fa y 5 min de vigencia', () => {
+      const token = tokens.firmarTemporal(temporal);
+      expect(tokens.verificarTemporal(token)).toEqual(temporal);
+      const decodificado = jwt.decode<Record<string, number | string>>(token);
+      expect(decodificado.proposito).toBe('2fa');
+      expect(Number(decodificado.exp) - Number(decodificado.iat)).toBe(300);
+      expect(decodificado).not.toHaveProperty('idNegocio');
+    });
+
+    it('no sirve como sesión, y el de sesión no sirve como temporal', () => {
+      expect(tokens.verificar(tokens.firmarTemporal(temporal))).toBeNull();
+      expect(tokens.verificarTemporal(tokens.firmar(payload))).toBeNull();
+    });
+
+    it('rechaza otro propósito, vencido, otra firma o payload incompleto', () => {
+      expect(
+        tokens.verificarTemporal(jwt.sign({ ...temporal, proposito: 'otro' })),
+      ).toBeNull();
+      expect(
+        tokens.verificarTemporal(
+          jwt.sign({ ...temporal, proposito: '2fa' }, { expiresIn: -10 }),
+        ),
+      ).toBeNull();
+      const otro = new JwtService({
+        secret: 'otro-secreto-distinto-de-32-caracteres',
+      });
+      expect(
+        tokens.verificarTemporal(otro.sign({ ...temporal, proposito: '2fa' })),
+      ).toBeNull();
+      expect(
+        tokens.verificarTemporal(jwt.sign({ idUsuario: 3, proposito: '2fa' })),
+      ).toBeNull();
+    });
+  });
 });

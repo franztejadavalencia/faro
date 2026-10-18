@@ -45,7 +45,9 @@ Swagger: `http://localhost:3000/api/docs`. Salud: `GET /api/salud`.
   `tsconfig.json`, en el bloque `jest` de `package.json` y en `test/jest-e2e.json`: un alias
   nuevo va en los tres.
 - Una dependencia nueva se instala exacta (`.npmrc` `save-exact`) y se anota en
-  `architecture.md` §1 en la misma tarea.
+  `architecture.md` §1 en la misma tarea. **Antes de instalarla, comprobar que Jest 29 la carga**:
+  el `require` de sus `exports` (y el de sus dependencias) debe dar CommonJS. Un paquete o una
+  dependencia solo ESM rompe los unit y los e2e (`@nestjs/jwt` 12 y `otplib`, decisiones 86 y 94).
 - **Express 5** (Nest 11, decisión 79): los comodines de ruta llevan nombre (`*splat`, `{*splat}`); el
   `query parser` es `simple`, así que `a[]=1` y `a[b]=1` no se parsean. Las listas en un filtro van
   como parámetro repetido (`?estado=1&estado=2`) y el DTO normaliza un solo valor a arreglo con
@@ -100,3 +102,21 @@ Swagger: `http://localhost:3000/api/docs`. Salud: `GET /api/salud`.
 - E2E: una ruta de prueba se marca `@Publico()` o se llama con un token de
   `POST /api/auth/login`; los usuarios se crean con `test/utils/usuarios-de-prueba.ts` (clave
   aleatoria). Varios logins seguidos cuentan para el bloqueo: cada caso usa su propio usuario.
+
+## 2FA (B5)
+- Flujo y contrato: `architecture.md` §11 (decisiones 50, 94 a 98). El login responde una unión
+  discriminada por `estado` (`OK` | `CONFIGURAR_2FA` | `VERIFICAR_2FA`); la 2FA es obligatoria
+  para el admin de plataforma.
+- **Token temporal** (`TokenService.firmarTemporal`, 5 min, `proposito: '2fa'`): el guard lo
+  acepta solo en rutas `@SoloTokenTemporal2fa()` y deja `request.usuario2fa` (léelo con
+  `@Usuario2fa()`), **no** `usuarioActual`: el contexto no tiene sesión. Por eso la 2FA escribe
+  con QueryBuilder y `usuario_modificacion` a mano, y la bitácora con `registrarAcceso`.
+- Fallos de clave y de código suman en `IntentosService` (`sumarFallo`, `reiniciar`,
+  `estaBloqueado`); con 2FA pendiente la clave correcta no reinicia el contador.
+- TOTP solo vía `seguridad/utils/totp.ts` (otplib por paquetes sueltos, decisión 94) y siempre con
+  la **hora real**: un test con instante fijo pasa `epoch` (segundos), nunca `RelojFijo`.
+- `totp_secreto` se cifra con `CifradoTotpService` (AES-256-GCM, AAD por usuario); nunca se
+  guarda ni se registra el secreto, la `uri`, un código o un token.
+- E2E: `test/utils/totp-de-prueba.ts` genera los códigos con otplib (`codigoTotp`,
+  `secretoDeUri`). Un admin de prueba recibe `CONFIGURAR_2FA`: enrólalo por la API (ver
+  `test/dos-factores.e2e-spec.ts`).

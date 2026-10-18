@@ -14,6 +14,7 @@ const base: Record<string, unknown> = {
   DB_USER: 'postgres',
   DB_PASSWORD: 'x',
   JWT_SECRET: 'a'.repeat(32),
+  TOTP_CLAVE_CIFRADO: Buffer.alloc(32, 7).toString('base64'),
   CORS_ORIGIN: 'http://localhost:4200',
 };
 
@@ -39,6 +40,25 @@ describe('validarEntorno', () => {
       validarEntorno({ ...base, JWT_SECRET: 'a'.repeat(31) }),
     ).toThrow(/JWT_SECRET/);
     expect(validarEntorno(base).JWT_SECRET).toHaveLength(32);
+  });
+
+  it('exige TOTP_CLAVE_CIFRADO en base64 de exactamente 32 bytes', () => {
+    const sinClave = { ...base };
+    delete sinClave.TOTP_CLAVE_CIFRADO;
+    expect(() => validarEntorno(sinClave)).toThrow(/TOTP_CLAVE_CIFRADO/);
+    for (const mala of [
+      '',
+      'cambiar',
+      Buffer.alloc(31).toString('base64'),
+      Buffer.alloc(33).toString('base64'),
+      'a'.repeat(44),
+    ]) {
+      expect(() =>
+        validarEntorno({ ...base, TOTP_CLAVE_CIFRADO: mala }),
+      ).toThrow(/TOTP_CLAVE_CIFRADO debe ser base64 de exactamente 32 bytes/);
+    }
+    const valida = validarEntorno(base).TOTP_CLAVE_CIFRADO;
+    expect(Buffer.from(valida, 'base64')).toHaveLength(32);
   });
 
   it('las variables ADMIN_* son opcionales y se conservan si están', () => {

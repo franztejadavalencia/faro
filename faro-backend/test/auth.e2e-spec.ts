@@ -96,12 +96,16 @@ describe('Auth: login, guard JWT, cambio de clave y bloqueo (e2e)', () => {
       });
     });
 
-    it('el admin de plataforma entra con negocio null', async () => {
+    it('el admin de plataforma sin 2FA recibe CONFIGURAR_2FA, no una sesión', async () => {
+      // La 2FA es obligatoria para el admin (B5); su sesión, con negocio null,
+      // la prueba test/dos-factores.e2e-spec.ts.
       const admin = await crearUsuarioDePrueba(dataSource, { negocio: null });
       const { body } = await login(admin.usuario, admin.clave).expect(200);
-      expect(body.usuario.negocio).toBeNull();
-      const contexto = await yo(body.token).expect(200);
-      expect(contexto.body.idNegocio).toBeNull();
+      expect(body).toEqual({
+        estado: 'CONFIGURAR_2FA',
+        tokenTemporal: expect.any(String),
+      });
+      await yo(body.tokenTemporal).expect(401);
     });
 
     it('el usuario no distingue mayúsculas ni espacios alrededor', async () => {

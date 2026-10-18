@@ -83,7 +83,7 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
 ### `seguridad/` y `abc/usuario`, `abc/permiso`
 | Archivo de SIAP | Cat. | Cambio en FARO | Tarea |
 |---|---|---|---|
-| `seguridad/auth/services/token.service.ts` | ~ | Payload `{ idUsuario, idNegocio }`; token temporal de 2FA (P, decisión 50). Hecho en B4 con `versionSesion`, `algorithms: [HS256]` al verificar y rechazo de un token con `proposito` | B4 (token temporal: B5) |
+| `seguridad/auth/services/token.service.ts` | ~ | Payload `{ idUsuario, idNegocio }`; token temporal de 2FA (P, decisión 50). Hecho en B4 con `versionSesion`, `algorithms: [HS256]` al verificar y rechazo de un token con `proposito`. Token temporal hecho en B5 (`firmarTemporal` / `verificarTemporal`, 5 min, `proposito: '2fa'`, con `versionSesion`) | B4 (token temporal: B5) |
 | `seguridad/auth/services/auth.service.ts` | R | Sin rol operativo; 401 (SIAP: `findOneOrFail` + `catch` → 400); respuesta de `architecture.md` §11; `findMenu` y `findPermiso` filtran `id_estado`; nombre con `nombreCompleto(persona)`; registra en `bitacora` (decisión 51). Hecho en B4: `lower(usuario)`, hash ficticio si no existe, bloqueo temporal atómico, `registrarAcceso` (decisión 88); `findMenu`/`findPermiso` pasan a B6 (decisión 91) | B4 (menú y permisos: B6) |
 | `seguridad/auth/controllers/auth.controller.ts`, `dto/login.dto.ts` | ~ | `POST /auth/login` (SIAP: `POST /auth`). Hecho en B4, con `POST /auth/cambiar-clave` | B4 |
 | `seguridad/auth/types/response-login.interface.ts` | ✗ | Contrato nuevo (§11) | B4 |
@@ -228,8 +228,10 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
       Tolerancia de ±1 paso (30 s) por desfase de reloj.
     - **Códigos de respaldo**: 10, de un solo uso, mostrados una vez al activar y guardados con
       hash (`usuario_codigo_respaldo`).
-    - Paquetes: `otplib` (CONTROLADOR usa la 13.x; se fija la versión exacta al instalar) y
-      `qrcode` para generar la imagen en el backend, o la URI para que el frontend la dibuje.
+    - Paquetes (hecho en B5, decisión 94): `@otplib/totp`, `core`, `uri` y `plugin-crypto-node`
+      13.5.0 por separado, con `@scure/base` 1.2.6 (el paquete `otplib` arrastra dependencias solo
+      ESM que Jest 29 no carga; CONTROLADOR usa `otplib` 13.x), y `qrcode` 1.5.4: el backend
+      genera la imagen (PNG en data URL) y entrega también la URI.
 - **Bitácora de acciones** (`logs` de CONTROLADOR: usuario, IP, acción, URL, método, user
   agent). Se adopta en la **preliminar** como `bitacora` por negocio (decisión 51), para eventos
   de seguridad y de negocio sensibles: login correcto y fallido, cambio y restablecimiento de

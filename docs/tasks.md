@@ -76,12 +76,13 @@ Backend (B) y frontend (F). Pueden avanzar en paralelo cuando haya contrato.
         `seed:admin` fija `NODE_ENV=development`, usa `ts-node` y el glob `src/**/*.entity.ts`, así
         que no corre en producción ni prueba el `debe_cambiar_clave = true` (decisión 82) · cerrada
         2026-10-18 (decisiones 86 a 93; `@nestjs/jwt` 11.0.2, `version_sesion`)
-- [ ] B5 · 2FA TOTP (decisión 50): `/auth/2fa/configurar` y `/verificar` con token temporal,
+- [x] B5 · 2FA TOTP (decisión 50): `/auth/2fa/configurar` y `/verificar` con token temporal,
         secreto cifrado, URI `otpauth://` y QR (PNG en data URL desde el backend), códigos de
         respaldo con hash, antirreúso `totp_ultimo_paso`, obligatoria para el admin; instalar y
         anotar `otplib` y `qrcode` (Opus) · e2e del flujo completo generando códigos con `otplib`;
         reúso de un paso rechazado; un token temporal no sirve en otras rutas; un código de
-        respaldo sirve una sola vez
+        respaldo sirve una sola vez · cerrada 2026-10-18 (decisiones 94 a 98; `@otplib/*` 13.5.0
+        por separado, `@scure/base` 1.2.6, `qrcode` 1.5.4)
 - [ ] B6 · Permisos: `modulo_sistema`/`opcion_modulo_sistema` por migración (opciones de la
         decisión 49; módulos de spec §4), `rol_usuario` por negocio con Dueño fijo (hereda de
         `BaseNegocioOpcionalEntity`) y el rol de plataforma, `usuario.id_rol_usuario` (asigna el
@@ -92,9 +93,13 @@ Backend (B) y frontend (F). Pueden avanzar en paralelo cuando haya contrato.
 - [ ] B7 · Usuarios del negocio: CRUD de empleados sobre `persona` (buscar o crear), clave
         temporal, restablecer clave y desbloquear (dueño → empleados; admin → dueño), bitácora;
         **consulta de la bitácora del negocio** para el dueño (filtro por usuario, evento y
-        fecha) · e2e: alta con persona nueva y existente; restablecer deja
-        `debe_cambiar_clave`; la consulta de bitácora filtra y solo muestra eventos del
-        negocio; **aislamiento A/B** (B no ve ni referencia usuarios, personas ni bitácora de A)
+        fecha); **2FA opcional del dueño** (decisión 97), con sesión: activar (configurar +
+        primer código), desactivar con clave + código y regenerar códigos de respaldo; activar y
+        desactivar suben `version_sesion` · e2e: alta con persona nueva y existente; restablecer
+        deja `debe_cambiar_clave`; la consulta de bitácora filtra y solo muestra eventos del
+        negocio; **aislamiento A/B** (B no ve ni referencia usuarios, personas ni bitácora de A);
+        el dueño activa la 2FA y el próximo login pide `VERIFICAR_2FA`; desactivar sin el código
+        correcto se rechaza; el admin no puede desactivar la suya
 - [ ] F1 · Crear `faro-frontend`: Angular CLI, Material con tema M3 de FARO, tokens `--faro-*`,
         Tailwind 4 sin preflight, Manrope, `DateFnsAdapter` `es`, ESLint, Prettier,
         `.npmrc save-exact` · `npm start` levanta una página con el tema; build y lint sin
@@ -116,8 +121,10 @@ Backend (B) y frontend (F). Pueden avanzar en paralelo cuando haya contrato.
         TOTP real
 - [ ] F6 · Pantallas de usuarios (buscador de persona con alta en el mismo formulario, clave
         temporal, restablecer, desbloquear), de permisos (matriz `mat-table`, Dueño de solo
-        lectura, roles propios) y **consulta de la bitácora del negocio** (filtros por
-        usuario, evento y fecha) · CRUD funcional contra B6 y B7; bitácora filtrable contra B7
+        lectura, roles propios), **consulta de la bitácora del negocio** (filtros por
+        usuario, evento y fecha) y **2FA del dueño** (activar con QR y códigos, desactivar,
+        regenerar códigos; decisión 97) · CRUD funcional contra B6 y B7; bitácora filtrable
+        contra B7; 2FA del dueño contra B7
 
 ## Fase 2: Dominio de FARO (Sonnet; "(Opus)" donde se indica)
 Backend `D` (dominio) y frontend `V` (vistas) (decisión 62). Cada V va después de su D.
@@ -174,9 +181,11 @@ Backend `D` (dominio) y frontend `V` (vistas) (decisión 62). Cada V va después
 - [ ] D13 · Dashboard (backend): evolución mensual de ventas, MC y utilidad, mes contra mes,
         marca del cambio de régimen · e2e con 3 meses cerrados
 - [ ] D14 · Admin de plataforma: listar negocios, activar y suspender, restablecer clave y
-        desbloquear al dueño, **consulta de la bitácora de plataforma**, sin acceso a datos
-        comerciales · e2e: el admin no entra a rutas de negocio; un negocio suspendido no
-        entra; la bitácora de plataforma no expone datos comerciales
+        desbloquear al dueño, **restablecer la 2FA del dueño** (decisión 97: `totp_activo =
+        false`, sin secreto ni códigos, `version_sesion + 1`, bitácora), **consulta de la
+        bitácora de plataforma**, sin acceso a datos comerciales · e2e: el admin no entra a rutas
+        de negocio; un negocio suspendido no entra; la bitácora de plataforma no expone datos
+        comerciales; tras restablecer la 2FA el dueño entra con `OK` y sus sesiones previas dan 401
 - [ ] D15 · Seed de demostración (decisión 60): `npm run seed:demo`, 7 meses por los servicios
         reales con `RelojFijo`, cierre de cada mes, historias del mockup de A6, dueño sin 2FA,
         admin sin 2FA configurada, claves desde `.env.development` · `npm run seed:demo` sobre
@@ -202,8 +211,8 @@ Backend `D` (dominio) y frontend `V` (vistas) (decisión 62). Cada V va después
 - [ ] V10 · Estado de resultados (cerrado y preliminar) y ranking · contra D12
 - [ ] V11 · Dashboard con chart.js (decisión 41), con la identidad del mockup · contra D13 con
         los datos de D15
-- [ ] V12 · Admin de plataforma: negocios, suspender, restablecer y desbloquear, **consulta de
-        la bitácora de plataforma** · contra D14
+- [ ] V12 · Admin de plataforma: negocios, suspender, restablecer y desbloquear, **restablecer la
+        2FA del dueño** (con confirmación), **consulta de la bitácora de plataforma** · contra D14
 
 **Orden sugerido**: B1, B2, B2b, B3–B7 y F1–F6 en paralelo cuando haya contrato → D1, D2, V1 → D3 → D4, V2
 → D5, D6, V3 → D7, V4 → D8, V5, V6 → D9, V7 → D10, V8 → D11, V9 → D12, V10 → D13, V11 → D14,

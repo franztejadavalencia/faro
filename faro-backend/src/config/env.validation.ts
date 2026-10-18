@@ -19,6 +19,9 @@ import {
 
 export const JWT_SECRET_MIN_CARACTERES = 32;
 
+/** 32 bytes en base64: 43 caracteres y un `=` de relleno. */
+const CLAVE_32_BYTES_BASE64 = /^[A-Za-z0-9+/]{43}=$/;
+
 export enum Entorno {
   Desarrollo = 'development',
   Prueba = 'test',
@@ -72,10 +75,15 @@ export class VariablesEntorno {
   @IsNotEmpty()
   CORS_ORIGIN!: string;
 
-  /** Obligatoria desde B5, cuando se cifre `totp_secreto`. */
-  @IsOptional()
+  /**
+   * Cifra `usuario.totp_secreto` con AES-256-GCM (B5): base64 de exactamente 32
+   * bytes. Perderla o cambiarla deja ilegibles los secretos ya guardados.
+   */
   @IsString()
-  TOTP_CLAVE_CIFRADO?: string;
+  @Matches(CLAVE_32_BYTES_BASE64, {
+    message: `TOTP_CLAVE_CIFRADO debe ser base64 de exactamente 32 bytes (genera una con: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")`,
+  })
+  TOTP_CLAVE_CIFRADO!: string;
 
   /**
    * Vacío = sin proxy (se usa `request.ip`). Con valor, va a `trust proxy` de
