@@ -22,7 +22,9 @@ const PARAMETRO_NEGOCIO = 'idNegocioContexto';
  *
  * - El filtro **siempre gana**: pisa un `idNegocio` que traiga el `where`.
  * - **Falla cerrado**: sin `idNegocio` en el contexto (usuario de plataforma o
- *   ruta sin sesión) lanza 403 en lugar de consultar sin filtro.
+ *   ruta sin sesión) responde 403 en lugar de consultar sin filtro. Los métodos
+ *   de lectura son `async`: el 403 llega como **promesa rechazada**. Solo
+ *   `createQueryBuilder()`, que devuelve el builder, lanza al crearse.
  * - No expone `save`/`update`/`delete`/`query`: se guarda con el repositorio
  *   normal y `AuditoriaSubscriber` pone o verifica `idNegocio`.
  *
@@ -36,47 +38,47 @@ export class NegocioRepository<T extends BaseConNegocioEntity> {
     private readonly contexto: RequestContextService,
   ) {}
 
-  find(opciones?: FindManyOptions<T>): Promise<T[]> {
+  async find(opciones?: FindManyOptions<T>): Promise<T[]> {
     return this.repositorio.find({
       ...opciones,
       where: this.conNegocio(opciones?.where),
     });
   }
 
-  findOne(opciones: FindOneOptions<T>): Promise<T | null> {
+  async findOne(opciones: FindOneOptions<T>): Promise<T | null> {
     return this.repositorio.findOne({
       ...opciones,
       where: this.conNegocio(opciones.where),
     });
   }
 
-  findBy(where: Where<T>): Promise<T[]> {
+  async findBy(where: Where<T>): Promise<T[]> {
     return this.repositorio.findBy(this.conNegocio(where));
   }
 
-  findOneBy(where: Where<T>): Promise<T | null> {
+  async findOneBy(where: Where<T>): Promise<T | null> {
     return this.repositorio.findOneBy(this.conNegocio(where));
   }
 
-  findAndCount(opciones?: FindManyOptions<T>): Promise<[T[], number]> {
+  async findAndCount(opciones?: FindManyOptions<T>): Promise<[T[], number]> {
     return this.repositorio.findAndCount({
       ...opciones,
       where: this.conNegocio(opciones?.where),
     });
   }
 
-  count(opciones?: FindManyOptions<T>): Promise<number> {
+  async count(opciones?: FindManyOptions<T>): Promise<number> {
     return this.repositorio.count({
       ...opciones,
       where: this.conNegocio(opciones?.where),
     });
   }
 
-  countBy(where: Where<T>): Promise<number> {
+  async countBy(where: Where<T>): Promise<number> {
     return this.repositorio.countBy(this.conNegocio(where));
   }
 
-  exists(opciones?: FindManyOptions<T>): Promise<boolean> {
+  async exists(opciones?: FindManyOptions<T>): Promise<boolean> {
     return this.repositorio.exists({
       ...opciones,
       where: this.conNegocio(opciones?.where),

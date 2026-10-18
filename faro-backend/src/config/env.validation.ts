@@ -12,9 +12,12 @@ import {
   Matches,
   Max,
   Min,
+  MinLength,
   ValidateIf,
   validateSync,
 } from 'class-validator';
+
+export const JWT_SECRET_MIN_CARACTERES = 32;
 
 export enum Entorno {
   Desarrollo = 'development',
@@ -54,8 +57,14 @@ export class VariablesEntorno {
   @IsString()
   DB_PASSWORD!: string;
 
+  /**
+   * Firma los JWT con HS256: la clave debe tener al menos 256 bits (RFC 7518
+   * §3.2). Con una corta la app no arranca.
+   */
   @IsString()
-  @IsNotEmpty()
+  @MinLength(JWT_SECRET_MIN_CARACTERES, {
+    message: `JWT_SECRET debe tener al menos ${JWT_SECRET_MIN_CARACTERES} caracteres (genera uno con: node -e "console.log(require('crypto').randomBytes(48).toString('base64'))")`,
+  })
   JWT_SECRET!: string;
 
   /** Uno o varios orígenes separados por coma. */

@@ -63,7 +63,7 @@ Backend (B) y frontend (F). Pueden avanzar en paralelo cuando haya contrato.
         (decisión 81) · migraciones suben y bajan; e2e: el trigger rechaza UPDATE/DELETE en
         `bitacora`; el índice `lower(usuario)` rechaza un duplicado global · cerrada 2026-10-17
         (decisiones 80 a 85)
-- [ ] B4 · Auth: `POST /api/auth/login` (respuesta de `architecture.md` §11 con `estado`), JWT,
+- [x] B4 · Auth: `POST /api/auth/login` (respuesta de `architecture.md` §11 con `estado`), JWT,
         `JwtAuthGuard` en `seguridad/` (estado de usuario y negocio, `debe_cambiar_clave` →
         403), cambio de clave, bloqueo temporal (decisión 53), bitácora de login (Opus) · e2e: login
         OK, 401 con clave mala, bloqueo al 5.º fallo y desbloqueo pasados los 15 min (el e2e
@@ -74,7 +74,8 @@ Backend (B) y frontend (F). Pueden avanzar en paralelo cuando haya contrato.
         (2) `ADMIN_CLAVE` vacía en `.env.example` (un valor de ejemplo copiado a un `.env` real
         sería una clave conocida); (3) en `architecture.md` §2, pendiente del despliegue: hoy
         `seed:admin` fija `NODE_ENV=development`, usa `ts-node` y el glob `src/**/*.entity.ts`, así
-        que no corre en producción ni prueba el `debe_cambiar_clave = true` (decisión 82)
+        que no corre en producción ni prueba el `debe_cambiar_clave = true` (decisión 82) · cerrada
+        2026-10-18 (decisiones 86 a 93; `@nestjs/jwt` 11.0.2, `version_sesion`)
 - [ ] B5 · 2FA TOTP (decisión 50): `/auth/2fa/configurar` y `/verificar` con token temporal,
         secreto cifrado, URI `otpauth://` y QR (PNG en data URL desde el backend), códigos de
         respaldo con hash, antirreúso `totp_ultimo_paso`, obligatoria para el admin; instalar y

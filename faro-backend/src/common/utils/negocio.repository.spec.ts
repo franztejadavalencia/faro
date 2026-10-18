@@ -115,19 +115,51 @@ describe('NegocioRepository (métodos de lectura)', () => {
     it.each([
       ['usuario de plataforma (idNegocio null)', null],
       ['sin sesión (idNegocio undefined)', undefined],
-    ])('%s → 403 y no consulta', (_texto, idNegocio) => {
+    ])('%s → 403 y no consulta', async (_texto, idNegocio) => {
       const { metodos, repositorio } = repositorioFalso();
       const negocios = new NegocioRepository(repositorio, contexto);
-      expect(() => conContexto(idNegocio, () => negocios.find())).toThrow(
-        ForbiddenException,
-      );
+      await expect(
+        conContexto(idNegocio, () => negocios.find()),
+      ).rejects.toThrow(ForbiddenException);
       expect(metodos.find).not.toHaveBeenCalled();
     });
 
-    it('fuera de un contexto también', () => {
+    it.each([
+      ['find', (r: NegocioRepository<Articulo>) => r.find()],
+      ['findOne', (r: NegocioRepository<Articulo>) => r.findOne({})],
+      ['findBy', (r: NegocioRepository<Articulo>) => r.findBy({ nombre: 'a' })],
+      [
+        'findOneBy',
+        (r: NegocioRepository<Articulo>) => r.findOneBy({ nombre: 'a' }),
+      ],
+      ['findAndCount', (r: NegocioRepository<Articulo>) => r.findAndCount()],
+      ['count', (r: NegocioRepository<Articulo>) => r.count()],
+      [
+        'countBy',
+        (r: NegocioRepository<Articulo>) => r.countBy({ nombre: 'a' }),
+      ],
+      ['exists', (r: NegocioRepository<Articulo>) => r.exists()],
+    ])(
+      '%s fuera de un contexto devuelve una promesa rechazada (no lanza en síncrono)',
+      async (nombre, llamar) => {
+        const { metodos, repositorio } = repositorioFalso();
+        const negocios = new NegocioRepository(repositorio, contexto);
+        let promesa: Promise<unknown> | undefined;
+        expect(() => {
+          promesa = llamar(negocios);
+        }).not.toThrow();
+        await expect(promesa).rejects.toThrow(ForbiddenException);
+        const mock = metodos[nombre as keyof typeof metodos];
+        expect(mock).not.toHaveBeenCalled();
+      },
+    );
+
+    it('createQueryBuilder sin contexto lanza al crearse (no es una promesa)', () => {
       const { repositorio } = repositorioFalso();
       const negocios = new NegocioRepository(repositorio, contexto);
-      expect(() => negocios.count()).toThrow(ForbiddenException);
+      expect(() => negocios.createQueryBuilder('a')).toThrow(
+        ForbiddenException,
+      );
     });
   });
 

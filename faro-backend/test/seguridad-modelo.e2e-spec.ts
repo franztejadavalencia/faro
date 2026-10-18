@@ -250,13 +250,13 @@ describe('Modelo de seguridad (e2e)', () => {
 
     it('sin idNegocio en el contexto (admin de plataforma) lanza 403', async () => {
       const fabrica = app.get(NegocioRepositoryFactory);
-      // NegocioRepository lanza en forma síncrona; un servicio async lo ve como rechazo.
+      // Los métodos de lectura devuelven el 403 como promesa rechazada (B4).
       await expect(
-        ejecutar(null, async () => fabrica.para(Usuario).find()),
+        ejecutar(null, () => fabrica.para(Usuario).find()),
       ).rejects.toBeInstanceOf(ForbiddenException);
-      await expect(
-        (async () => fabrica.para(Persona).find())(),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(fabrica.para(Persona).find()).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
     });
 
     it('un contexto con negocio no puede crear una persona de plataforma', async () => {

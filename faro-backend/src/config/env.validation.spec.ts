@@ -13,7 +13,7 @@ const base: Record<string, unknown> = {
   DB_NAME: 'faro_test',
   DB_USER: 'postgres',
   DB_PASSWORD: 'x',
-  JWT_SECRET: 'x',
+  JWT_SECRET: 'a'.repeat(32),
   CORS_ORIGIN: 'http://localhost:4200',
 };
 
@@ -29,6 +29,16 @@ describe('validarEntorno', () => {
     const sinJwt = { ...base };
     delete sinJwt.JWT_SECRET;
     expect(() => validarEntorno(sinJwt)).toThrow(/JWT_SECRET/);
+  });
+
+  it('rechaza un JWT_SECRET vacío o de menos de 32 caracteres', () => {
+    expect(() => validarEntorno({ ...base, JWT_SECRET: '' })).toThrow(
+      /JWT_SECRET debe tener al menos 32/,
+    );
+    expect(() =>
+      validarEntorno({ ...base, JWT_SECRET: 'a'.repeat(31) }),
+    ).toThrow(/JWT_SECRET/);
+    expect(validarEntorno(base).JWT_SECRET).toHaveLength(32);
   });
 
   it('las variables ADMIN_* son opcionales y se conservan si están', () => {

@@ -7,6 +7,7 @@ import { CommonModule } from './common/common.module';
 import { SaludModule } from './salud/salud.module';
 import { PlataformaModule } from '@plataforma/plataforma.module';
 import { SeguridadModule } from '@seguridad/seguridad.module';
+import { AuthModule } from '@seguridad/auth/auth.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { SeguridadModule } from '@seguridad/seguridad.module';
     SaludModule,
     PlataformaModule,
     SeguridadModule,
+    AuthModule,
   ],
 })
 export class AppModule {}

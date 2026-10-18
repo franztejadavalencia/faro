@@ -20,6 +20,7 @@ export class ContextoRequestInterceptor implements NestInterceptor {
         idUsuario: request.usuarioActual?.idUsuario,
         idNegocio: request.usuarioActual?.idNegocio,
         ip: request.ip,
+        userAgent: request.get('user-agent'),
         url: request.originalUrl,
         metodo: request.method,
       },

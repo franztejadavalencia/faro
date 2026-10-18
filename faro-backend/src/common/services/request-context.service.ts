@@ -6,6 +6,7 @@ export interface ContextoRequest {
   /** `null` = usuario de plataforma; `undefined` = sin sesión. */
   idNegocio?: number | null;
   ip?: string;
+  userAgent?: string;
   url?: string;
   metodo?: string;
 }

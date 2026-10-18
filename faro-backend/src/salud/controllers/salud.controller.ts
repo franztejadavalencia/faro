@@ -11,9 +11,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { DataSource } from 'typeorm';
+import { Publico } from '@common/decorators/publico.decorator';
 import { SaludDto } from '../dto/salud.dto';
 
-// TODO(B4): marcar con @Publico() cuando exista el guard JWT global.
+@Publico()
 @ApiTags('salud')
 @Controller('salud')
 export class SaludController {

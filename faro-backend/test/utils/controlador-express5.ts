@@ -2,6 +2,7 @@ import { Controller, Get, Module, Query, Req } from '@nestjs/common';
 import { Transform } from 'class-transformer';
 import { IsArray, IsOptional, IsString } from 'class-validator';
 import { Request } from 'express';
+import { Publico } from '../../src/common/decorators/publico.decorator';
 
 /** Filtro de ejemplo: la regla de CLAUDE.md para listas en la query. */
 export class FiltroDePruebaDto {
@@ -15,6 +16,7 @@ export class FiltroDePruebaDto {
 }
 
 /** Solo de prueba: fija el comportamiento de Express 5 que usará el resto de FARO. */
+@Publico()
 @Controller('prueba-express5')
 export class ControladorExpress5 {
   @Get('query')

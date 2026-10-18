@@ -24,7 +24,7 @@ Se fijan **exactas**, sin `^` ni `~`, con `save-exact=true` en el `.npmrc` de ca
 | @nestjs/common, @nestjs/core, @nestjs/platform-express, @nestjs/testing | **11.2.7** (SIAP: 10.4.x). Nest 11 por la decisión 79 (B2b); sobre Express 5.2.1 y `path-to-regexp` 8 |
 | @nestjs/cli | 11.0.24 (trae su propio `typescript` 5.9.3 anidado; `nest build` usa el 5.6.3 del proyecto porque resuelve desde `process.cwd()`) |
 | @nestjs/typeorm | 11.0.3 |
-| @nestjs/jwt | 12.0.1 (B4 la instala; su peer admite Nest 8 a 12, B4 confirma la versión) |
+| @nestjs/jwt | **11.0.2** (instalada en B4; con `jsonwebtoken` 9.0.3). No 12.x: desde 12.0.0 es solo ESM y Jest 29 no la carga (decisión 86). Sin `@nestjs/passport` |
 | @nestjs/swagger | 11.4.7 |
 | @nestjs/config | 4.0.4 |
 | typeorm | **0.3.31** (SIAP: 0.3.20). Parche de seguridad del mismo minor (decisión 74, B2): cierra la inyección SQL en `repository.save`/`update` y en `migration:generate`. Desde 0.3.23, `update({}, …)` y `delete({})` con criterio vacío lanzan error |
@@ -94,6 +94,18 @@ tarea que lo instala.
   tiene `TRUNCATE` ni `ALTER` sobre `bitacora` (B3) ni sobre `asiento` y `asiento_detalle` (D3): el
   trigger de solo inserción no protege del dueño de la tabla, que puede desactivarlo. En
   desarrollo y prueba sigue `postgres`, porque `limpiarBase()` necesita `TRUNCATE`.
+- **Pendiente para el despliegue: `seed:admin`** (B3, decisión 82). Hoy el script fija
+  `NODE_ENV=development`, corre con `ts-node` y carga las entidades con el glob
+  `src/**/*.entity.ts`: no corre en un servidor de producción (sin `src/` ni `ts-node`), así que
+  el `debe_cambiar_clave = true` de `production` solo está probado por el e2e. Antes de desplegar:
+  una variante compilada (`dist/…/seed-admin.js`, entidades de `dist/`) que respete el
+  `NODE_ENV` del servidor.
+- **Pendiente para el despliegue: límite de peticiones por IP** (decisión 92). El bloqueo por
+  cuenta (decisión 53) no frena probar una clave común contra muchas cuentas (password
+  spraying; OWASP Authentication Cheat Sheet, ASVS V2.2.1). Antes de publicar: `limit_req` del
+  proxy (nginx) o `@nestjs/throttler` sobre `POST /api/auth/*`. Con un proxy delante, la IP real
+  solo se ve con `TRUST_PROXY` configurado (decisión 51); si no, todo el tráfico cuenta como una
+  sola IP.
 - Variables de entorno en `faro-backend/`:
 
   | Archivo | Uso | Git |
@@ -112,12 +124,19 @@ tarea que lo instala.
   DB_NAME=faro_dev
   DB_USER=postgres
   DB_PASSWORD=cambiar
-  JWT_SECRET=cambiar
+  JWT_SECRET=
   TOTP_CLAVE_CIFRADO=cambiar
   CORS_ORIGIN=http://localhost:4200
   TRUST_PROXY=
   SWAGGER=
+  ADMIN_USUARIO=admin
+  ADMIN_CLAVE=
+  ADMIN_NOMBRE=Administrador de plataforma
   ```
+  - `JWT_SECRET` (decisión 90): **mínimo 32 caracteres**; vacío o corto, la app no arranca. Va
+    vacío en `.env.example` para que nadie copie un valor conocido. Se genera con
+    `node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"` (64
+    caracteres, 384 bits). B5 aplica la misma regla a `TOTP_CLAVE_CIFRADO`.
   - `src/config/env.validation.ts` valida el `.env` al arrancar (app, CLI de migraciones y e2e):
     si una variable falta o no cumple, la app no arranca y dice cuál.
   - `CORS_ORIGIN`: uno o varios orígenes separados por coma.
@@ -128,7 +147,7 @@ tarea que lo instala.
     las agrega cada tarea.
   - `ADMIN_USUARIO`, `ADMIN_CLAVE` y `ADMIN_NOMBRE` (B3): opcionales para la app, las exige solo
     `npm run seed:admin`. `ADMIN_CLAVE`: mínimo 8 caracteres y máximo 72 **bytes** (bcrypt ignora el
-    resto). El admin se siembra con un script, no con una migración (decisión 82): es idempotente
+    resto); vacía en `.env.example` (B4: un valor de ejemplo sería una clave conocida). El admin se siembra con un script, no con una migración (decisión 82): es idempotente
     y no pisa una clave existente. En `production` nace con `debe_cambiar_clave = true` y, tras
     sembrar, se borra `ADMIN_CLAVE` de `.env.production` (OWASP ASVS V2.3.1); en `development` y
     `test` nace con `false`. Los e2e no necesitan estas variables: llaman a
@@ -156,8 +175,8 @@ tarea que lo instala.
   `development` y `test`; en `production` solo con `SWAGGER=true` (B1: no exponer el esquema de
   la API sin decidirlo).
 - `GET /api/salud`: chequeo de salud permanente (`SELECT 1`). 200 `{ estado, baseDatos }`; 503
-  si la base no responde, sin detalles de la base en la respuesta (van al log). Será
-  `@Publico()` desde B4.
+  si la base no responde, sin detalles de la base en la respuesta (van al log). `@Publico()`
+  (B4).
 - Tests: `npm test` (unit, `src/**/*.spec.ts`, proceso en `TZ=UTC`) y `npm run test:e2e`
   (`test/**/*.e2e-spec.ts`, `NODE_ENV=test`, `--runInBand`). El setup de los e2e migra
   `faro_test`; cada suite llama `limpiarBase()` (`TRUNCATE … RESTART IDENTITY CASCADE` de todo
@@ -281,8 +300,8 @@ completa.
 - Toda tabla de un negocio tiene `id_negocio` (FK a `negocio`) y hereda de `BaseNegocioEntity`
   (`NOT NULL`). Solo `persona`, `usuario` y `rol_usuario`, que pueden ser de plataforma, heredan de
   `BaseNegocioOpcionalEntity` (nullable). Ambas cuelgan de `BaseConNegocioEntity` (decisión 81).
-- El JWT lleva `{ idUsuario, idNegocio }`. `RequestContextService` (AsyncLocalStorage de SIAP)
-  suma `idNegocio` a `{ idUsuario, ip, url, metodo }`.
+- El JWT lleva `{ idUsuario, idNegocio, versionSesion }` (§11). `RequestContextService` (AsyncLocalStorage de SIAP)
+  suma `idNegocio` y `userAgent` (B4, para la bitácora) a `{ idUsuario, ip, url, metodo }`.
 - **El filtro por `id_negocio` vive en una base común y no se escribe a mano en cada consulta**:
   - `NegocioRepository<T>` (en `common/utils/`, decisión 77) **envuelve** un `Repository<T>`
     (no hereda de él, para no exponer `save`/`update`/`delete`/`query` sin filtro). Se obtiene
@@ -451,7 +470,7 @@ erDiagram
   B6**, que crea el rol de plataforma, se lo asigna al admin y recién entonces pone `NOT NULL` y
   la FK; decisión 85), `debe_cambiar_clave`, `totp_secreto` (`text`, `select: false`: guarda el
   texto **cifrado**, nunca el secreto; el formato lo define B5), `totp_activo`, `totp_ultimo_paso`
-  (antirreúso), `intentos_fallidos` y `bloqueado_hasta` (bloqueo temporal, decisión 53).
+  (antirreúso), `intentos_fallidos` y `bloqueado_hasta` (bloqueo temporal, decisión 53) y `version_sesion` (B4, va en el JWT; decisión 87).
   - **Excepción a §4**: el login es **único en toda la plataforma**, no por negocio, porque el
     login no pide el negocio. Índice único sobre `lower(usuario)` con `id_estado = 1`.
   - `usuario_codigo_respaldo (id_usuario, hash, usado_en, fecha_registro)`: códigos de respaldo de la 2FA, de
@@ -472,7 +491,9 @@ erDiagram
   `NegocioRepository` no la acepta (decisión 84): toda lectura y escritura pasa por un único
   `BitacoraService` (`registrar` en B4, `consultar` en B7) que toma `idNegocio` e `idUsuario` **del
   contexto**, nunca del DTO ni de la ruta, y falla cerrado (403) sin `idNegocio` en `consultar`.
-  Solo `plataforma/` lee la bitácora de varios negocios (D14).
+  Excepción (decisión 88): `registrarAcceso(evento, actor, detalle)`, solo para eventos previos a
+  la sesión (login en B4, verificación 2FA en B5), con `actor` leído de la fila de `usuario` en el
+  servidor o `null`. Solo `plataforma/` lee la bitácora de varios negocios (D14).
 
 ### Catálogo
 - `proveedor`: `id_persona` (único por negocio) y solo los datos comerciales (p. ej. notas).
@@ -654,18 +675,25 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
 
 ## 11. Auth y permisos (decisión 22)
 
-- `POST /api/auth/login` (público):
+- `POST /api/auth/login` (público; implementado en B4):
   ```json
   {
+    "estado": "OK",
     "token": "…",
-    "usuario": { "id": 1, "nombre": "…", "negocio": { "id": 1, "nombre": "…" }, "rol": "Dueño" },
+    "usuario": {
+      "id": 1, "nombre": "…", "debeCambiarClave": false,
+      "negocio": { "id": 1, "nombre": "…" }, "rol": "Dueño"
+    },
     "menu": [ … ],
     "permisos": [ { "modulo": "…", "opcion": "…" } ]
   }
   ```
-  Credenciales malas, usuario desactivado o negocio suspendido → **401** (SIAP responde 400).
-  Para el admin de plataforma, `negocio` es `null`. Se diseña desde cero, sin los campos
-  heredados de SIAP.
+  Credenciales malas, usuario desactivado, cuenta bloqueada o negocio suspendido → **401** con el
+  mismo cuerpo, "Credenciales inválidas" (SIAP responde 400). Para el admin de plataforma,
+  `negocio` es `null`. Se diseña desde cero, sin los campos heredados de SIAP. **Hasta B6**
+  `rol` es `null` y `menu` y `permisos` vienen vacíos (decisión 91). El login no distingue
+  mayúsculas en el usuario (índice `lower(usuario)`) y siempre corre `bcrypt.compare` (contra un
+  hash ficticio si el usuario no existe), para que el tiempo no revele qué cuentas existen.
   - `usuario.nombre` sale de `nombreCompleto(persona)` (decisión 43).
   - La respuesta incluye `usuario.debeCambiarClave` (decisión 48).
   - La respuesta lleva `estado`: `OK` (trae el JWT), `CONFIGURAR_2FA` o `VERIFICAR_2FA`
@@ -683,18 +711,38 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
   - **Bloqueo temporal** (decisión 53): fallos de clave y de código suman en
     `intentos_fallidos`; con 5 seguidos, `bloqueado_hasta = ahora + 15 min`. El mensaje es
     siempre "Credenciales inválidas"; el motivo real va a la bitácora. El dueño (para sus
-    empleados) y el admin de plataforma pueden desbloquear antes.
+    empleados) y el admin de plataforma pueden desbloquear antes. El fallo se suma con un solo
+    `UPDATE … RETURNING` (atómico ante peticiones en paralelo) y con la hora de la base; al
+    bloquear, el contador vuelve a 0. Durante el bloqueo los fallos no suman ni lo alargan, y
+    una sesión ya abierta sigue (el bloqueo frena el próximo login, no revoca).
   - Diseño revisado contra la rama `dev` de CONTROLADOR; ver las fallas que se evitan en
     `base-desde-siap.md`, "Referencias de CONTROLADOR".
-  - Todo login, correcto o fallido, se registra en `bitacora` (decisión 51).
-- JWT de 12 h firmado con `JWT_SECRET`; payload `{ idUsuario, idNegocio }`. Contraseñas con
-  bcrypt. `@Publico()` marca las rutas sin token, como SIAP.
+  - Todo login, correcto o fallido, se registra en `bitacora` (decisión 51) con
+    `BitacoraService.registrarAcceso` (decisión 88): `LOGIN_OK`, `LOGIN_FALLIDO` con
+    `detalle.motivo` (`USUARIO_INEXISTENTE`, `BLOQUEADO`, `CLAVE_INCORRECTA`,
+    `NEGOCIO_SUSPENDIDO`) y `BLOQUEO_CUENTA`. Nunca la clave ni el token (decisión 93).
+- `POST /api/auth/cambiar-clave` (B4, decisión 89): `{ claveActual, claveNueva }`, con el
+  usuario del **token** (no de la ruta). La nueva cumple `errorDeClave()` y es distinta de la
+  actual. Clave actual incorrecta → 400 y suma intento (`CAMBIO_CLAVE_FALLIDO`; al 5.º,
+  `BLOQUEO_CUENTA`); con la cuenta bloqueada, 429. Guarda con `save()`, quita
+  `debe_cambiar_clave`, sube `version_sesion` y responde como el login, con un token nuevo.
+- JWT de 12 h firmado con `JWT_SECRET` (HS256, y solo HS256 al verificar: RFC 8725 §3.1);
+  payload `{ idUsuario, idNegocio, versionSesion }`. Contraseñas con bcrypt. `@Publico()` marca
+  las rutas sin token, como SIAP.
+  - **`version_sesion`** (decisión 87): el guard rechaza un token con otra versión. Sube al
+    cambiar la clave (B4), al restablecerla (B7) y al activar o desactivar la 2FA (B5): así se
+    cierran las demás sesiones. No sube al desbloquear ni al desactivar al usuario.
+  - Un token con `proposito` (el temporal de la 2FA, B5) no sirve como sesión.
 - Guards globales, en `seguridad/` (`common/` no importa de `seguridad/`;
   `docs/base-desde-siap.md`):
-  - `JwtAuthGuard`: firma, vigencia y estado de usuario y negocio (§6). Si
-    `debe_cambiar_clave` es `true`, responde **403** a toda ruta salvo cambiar la contraseña
-    y cerrar sesión.
-  - `PermisoGuard`.
+  - `JwtAuthGuard` (`seguridad/auth/guards/`, `APP_GUARD` en `AuthModule`): en una ruta
+    `@Publico()` no lee el token. En las demás, firma y vigencia y, con una consulta por
+    request (`usuario` ⨝ `negocio` por PK), estado del usuario y del negocio (§6), que el
+    `idNegocio` del token sea el del usuario y `version_sesion`: si algo falla, 401. Si
+    `debe_cambiar_clave` es `true`, responde **403** a toda ruta salvo las marcadas con
+    `@PermitidoConClaveTemporal()` (solo el cambio de clave; no hay ruta de cierre de sesión: el
+    frontend borra el token).
+  - `PermisoGuard` (B6).
 - **Contraseñas** (decisión 48): el dueño escribe una clave temporal (mínimo 8 caracteres) al
   crear un empleado. El dueño restablece la de sus empleados y el admin de plataforma la del
   dueño; ambas acciones dejan `debe_cambiar_clave = true`. Sin recuperación por correo en la
@@ -815,5 +863,6 @@ Paleta **definitiva** (decisión 23, mockup aprobado en A6):
 | 20 | Nest 10.4 (Express 4, `query parser` extendido) | Nest 11.2.7 (Express 5, `query parser` simple) | Decisión 79: Nest 10 no recibe parches; 15 avisos de `npm audit` pasan a 2 |
 | 21 | `bcrypt` ^5.1.1 (arrastra `tar` vulnerable por `node-pre-gyp`) | `bcrypt` 6.0.0 | Decisión 80: 5 hallazgos de `npm audit` con 5.1.1 (1 crítica) frente a los 2 aceptados |
 | 22 | `BaseEntity` sin tenant (SIAP no lo tiene) | `BaseConNegocioEntity` con `BaseNegocioEntity` (NOT NULL) y `BaseNegocioOpcionalEntity` (nullable) | Decisión 81: TypeORM no deja redeclarar columnas heredadas |
+| 23 | `PATCH usuario/:id/cambiar-clave` toma el usuario de la ruta, con `update()` y mínimo 4 caracteres; guard JWT solo con firma y vigencia; login que distingue mayúsculas y sin `bcrypt.compare` si el usuario no existe | `POST /auth/cambiar-clave` con el usuario del token, `save()` y `errorDeClave()`; guard que relee usuario, negocio y `version_sesion`; login por `lower(usuario)` con hash ficticio, bloqueo temporal y bitácora | Decisiones 30, 53, 87, 89: un usuario con sesión no debe tocar la clave de otro; un token no sobrevive a la baja, la suspensión ni al cambio de clave; el tiempo de respuesta no revela cuentas |
 El inventario de lo que se porta, con sus dependencias ocultas, está en
 `docs/base-desde-siap.md` (corregido en A4).

@@ -61,7 +61,7 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
 | `services/request-context.service.ts` | ~ | Suma `idNegocio` y `obtenerIdNegocio()`. Hecho en B2 | B2 |
 | `subscribers/auditoria.subscriber.ts` | ~ | Pone `id_negocio` del contexto al insertar y rechaza uno distinto; en update rechaza otro negocio y cambiar el `id_negocio` (`architecture.md` §6, decisión 77); sin `any`. Hecho en B2 | B2 |
 | `interceptors/contexto-request.interceptor.ts` | ~ | Tipo de payload propio de `common` (`types/payload-token.ts`); suma `idNegocio`. Hecho en B2 | B2 |
-| `guards/jwt-auth.guard.ts` | ~ | Pasa a `seguridad/auth/guards/`; valida en cada request el estado del usuario y del negocio y `debe_cambiar_clave` (decisiones 30 y 48) | B4 |
+| `guards/jwt-auth.guard.ts` | ~ | Pasa a `seguridad/auth/guards/`; valida en cada request el estado del usuario y del negocio y `debe_cambiar_clave` (decisiones 30 y 48). Hecho en B4: en una ruta `@Publico()` no lee el token; también revisa `version_sesion` (decisión 87); `@PermitidoConClaveTemporal()` para el cambio de clave | B4 |
 | `decorators/publico.decorator.ts` | = | — | B2 |
 | `common.module.ts` | ~ | Sin `imports: [AuthModule]`; los `APP_GUARD` se registran en `seguridad` (B4). Suma `Reloj`, `NegocioRepositoryFactory` y `APP_FILTER`. Hecho en B2 | B2/B4 |
 | `dto/anular.dto.ts`, `incluir-anulados.dto.ts`, `motivo.dto.ts`, `notas.dto.ts` | = | Solo `!` por `strict`. Hecho en B2 | B2 |
@@ -83,14 +83,14 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
 ### `seguridad/` y `abc/usuario`, `abc/permiso`
 | Archivo de SIAP | Cat. | Cambio en FARO | Tarea |
 |---|---|---|---|
-| `seguridad/auth/services/token.service.ts` | ~ | Payload `{ idUsuario, idNegocio }`; token temporal de 2FA (P, decisión 50) | B4 (token temporal: B5) |
-| `seguridad/auth/services/auth.service.ts` | R | Sin rol operativo; 401 (SIAP: `findOneOrFail` + `catch` → 400); respuesta de `architecture.md` §11; `findMenu` y `findPermiso` filtran `id_estado`; nombre con `nombreCompleto(persona)`; registra en `bitacora` (decisión 51) | B4 |
-| `seguridad/auth/controllers/auth.controller.ts`, `dto/login.dto.ts` | ~ | `POST /auth/login` (SIAP: `POST /auth`) | B4 |
+| `seguridad/auth/services/token.service.ts` | ~ | Payload `{ idUsuario, idNegocio }`; token temporal de 2FA (P, decisión 50). Hecho en B4 con `versionSesion`, `algorithms: [HS256]` al verificar y rechazo de un token con `proposito` | B4 (token temporal: B5) |
+| `seguridad/auth/services/auth.service.ts` | R | Sin rol operativo; 401 (SIAP: `findOneOrFail` + `catch` → 400); respuesta de `architecture.md` §11; `findMenu` y `findPermiso` filtran `id_estado`; nombre con `nombreCompleto(persona)`; registra en `bitacora` (decisión 51). Hecho en B4: `lower(usuario)`, hash ficticio si no existe, bloqueo temporal atómico, `registrarAcceso` (decisión 88); `findMenu`/`findPermiso` pasan a B6 (decisión 91) | B4 (menú y permisos: B6) |
+| `seguridad/auth/controllers/auth.controller.ts`, `dto/login.dto.ts` | ~ | `POST /auth/login` (SIAP: `POST /auth`). Hecho en B4, con `POST /auth/cambiar-clave` | B4 |
 | `seguridad/auth/types/response-login.interface.ts` | ✗ | Contrato nuevo (§11) | B4 |
-| `seguridad/auth/auth.module.ts` | ~ | `JWT_SECRET` desde `ConfigService` | B4 |
+| `seguridad/auth/auth.module.ts` | ~ | `JWT_SECRET` desde `ConfigService` (`registerAsync`). Hecho en B4 con `@nestjs/jwt` 11.0.2 (decisión 86); registra `JwtAuthGuard` como `APP_GUARD` | B4 |
 | `abc/usuario/entities/usuario.entity.ts` | ~ | `id_persona` a la `persona` de FARO; `id_negocio`; `debe_cambiar_clave`; `totp_secreto` (cifrado), `totp_activo`; índice único global `lower(usuario)` con `id_estado = 1` (decisiones 43, 48 y 50). Hecho en B3 (`BaseNegocioOpcionalEntity`, `totp_secreto` cifrado y `select: false`; sin `id_rol_usuario`, que llega con B6, decisión 85) | B3 |
-| `abc/usuario/services/usuario.service.ts` | ~ | Sin `CLAVE_POR_DEFECTO = '1234'`: clave temporal del dueño (mín. 8) y restablecer clave (decisión 48); `findManyByStatus` usa el filtro (SIAP lo ignora); `changeClave` con `save()`; `findAllDetalle` sin `CONCAT` | B4 (`changeClave`) / B7 |
-| `abc/usuario/controllers/`, `dto/` (incl. `change-clave.dto.ts`), `types/`, `usuario.module.ts` | ~ | Sin `InstitucionModule`; `PartialType` desde `@nestjs/swagger` | B4 (`change-clave`) / B7 |
+| `abc/usuario/services/usuario.service.ts` | ~ | Sin `CLAVE_POR_DEFECTO = '1234'`: clave temporal del dueño (mín. 8) y restablecer clave (decisión 48); `findManyByStatus` usa el filtro (SIAP lo ignora); `changeClave` con `save()` (hecho en B4 como `AuthService.cambiarClave`, con el usuario del token, decisión 89); `findAllDetalle` sin `CONCAT` | B4 (`changeClave`) / B7 |
+| `abc/usuario/controllers/`, `dto/` (incl. `change-clave.dto.ts`), `types/`, `usuario.module.ts` | ~ | Sin `InstitucionModule`; `PartialType` desde `@nestjs/swagger` | B4 (`change-clave`: `seguridad/auth/dto/cambiar-clave.dto.ts`, hecho) / B7 |
 | `abc/permiso/entities/rol-usuario.entity.ts` | ~ | `id_negocio` (null en plataforma); único `(id_negocio, nombre)`; marca de rol fijo (Dueño) (decisión 44) | B6 |
 | `abc/permiso/entities/modulo-sistema.entity.ts`, `opcion-modulo-sistema.entity.ts`, `constants/tipo-modulo-codigo.ts` | = | Catálogo global; filas solo por migración (decisión 45) | B6 |
 | `abc/permiso/entities/permiso-rol-usuario.entity.ts` | = | — | B6 |
@@ -176,7 +176,7 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
   seeds (admin de plataforma, módulos, opciones) se crean con **migraciones** en FARO. No se
   copian backups `.sql` de SIAP.
 - Opciones de permiso de la seed (decisión 49): `ver`, `crear`, `editar`, `eliminar`, `anular`,
-  `cerrar`, `reabrir`, `ver_costos`. La lista de módulos se define en B4, siguiendo spec §4.
+  `cerrar`, `reabrir`, `ver_costos`. La lista de módulos se define en B6 (que crea las tablas), siguiendo spec §4 (decisión 91).
 
 ## Referencias de CONTROLADOR
 

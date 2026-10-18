@@ -23,6 +23,7 @@ import { Reloj } from '../src/common/reloj/reloj';
 import { RelojFijo } from '../src/common/reloj/reloj-fijo';
 import { AppModule } from '../src/app.module';
 import { configurarApp } from '../src/configurar-app';
+import { Publico } from '../src/common/decorators/publico.decorator';
 import { crearApp } from './utils/crear-app';
 import { limpiarBase } from './utils/limpiar-base';
 
@@ -41,6 +42,7 @@ class GuardDePrueba implements CanActivate {
       request.usuarioActual = {
         idUsuario: Number(usuario),
         idNegocio: typeof negocio === 'string' ? Number(negocio) : null,
+        versionSesion: 0,
       };
     }
     return true;
@@ -59,6 +61,8 @@ class ServicioDePrueba {
   }
 }
 
+// Pública: el guard JWT global no lee el token; `GuardDePrueba` pone el usuario.
+@Publico()
 @Controller('prueba')
 class ControladorDePrueba {
   constructor(
@@ -128,12 +132,14 @@ describe('Contexto del request, reloj y filtro de errores (e2e)', () => {
         .get('/api/prueba/contexto?ms=20')
         .set('x-prueba-usuario', '5')
         .set('x-prueba-negocio', '7')
+        .set('User-Agent', 'prueba-e2e/1.0')
         .expect(200);
       expect(body).toMatchObject({
         idUsuario: 5,
         idNegocio: 7,
         url: '/api/prueba/contexto?ms=20',
         metodo: 'GET',
+        userAgent: 'prueba-e2e/1.0',
       });
       expect(typeof body.ip).toBe('string');
     });

@@ -1,12 +1,22 @@
 # Cómo trabajar FARO con Claude Code
 
 ## 0. Instalar (una vez por equipo)
-En una terminal de Cursor (PowerShell):
+Instalador nativo (recomendado por la documentación de Claude Code: se actualiza solo en segundo
+plano y no depende de la carpeta global de npm). En PowerShell:
 ```
-npm install -g @anthropic-ai/claude-code
-claude          # la primera vez pide iniciar sesión con tu cuenta
+irm https://claude.ai/install.ps1 | iex
 ```
-Requiere Node 18+ (tienes 22 por SIAP) y Git for Windows.
+Abre una terminal **nueva** (en Cursor también) y comprueba:
+```
+claude --version
+where.exe claude   # debe salir solo %USERPROFILE%\.local\bin\claude.exe
+claude doctor      # salud de la instalación y resultado de la última actualización
+claude             # la primera vez pide iniciar sesión con tu cuenta
+```
+Si antes estaba instalado con npm, quítalo primero (`npm uninstall -g @anthropic-ai/claude-code`)
+para no tener dos instalaciones. Git for Windows es recomendable (Claude Code usa Git Bash; sin él
+usa PowerShell). Node 22 sigue haciendo falta para FARO y SIAP, no para Claude Code.
+Si aparece "Auto-update failed", cierra las sesiones y corre `claude doctor`.
 
 ## 1. Inicializar el repo (una vez)
 ```

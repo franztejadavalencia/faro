@@ -67,6 +67,11 @@ Swagger: `http://localhost:3000/api/docs`. Salud: `GET /api/salud`.
   Toda lectura y escritura pasa por un único `BitacoraService` (`registrar` en B4, `consultar` en
   B7) que toma `idNegocio` e `idUsuario` del contexto, nunca del DTO ni de la ruta, y falla
   cerrado (403) sin `idNegocio` en `consultar`. Solo `plataforma/` lee la de varios negocios.
+  Antes de la sesión (login, verificación 2FA) se usa `registrarAcceso(evento, actor, detalle)`,
+  con `actor` de la fila de `usuario` leída en el servidor (decisión 88). Nunca la clave ni el
+  token en `detalle` ni en un log (decisión 93). Eventos en `seguridad/constants/eventos-bitacora.ts`.
+- **`NegocioRepository` devuelve el 403 como promesa rechazada** (sus lecturas son `async`); solo
+  `createQueryBuilder()` lanza al crearse.
 - **Solo `save()` audita** (`usuario_registro`, `usuario_modificacion`, `id_negocio`). Con
   `update()`, `insert()` o QueryBuilder sobre esas tablas, la auditoría se escribe a mano.
 - **Fechas de negocio con `Reloj`** (`reloj.hoy()`, `ahora()`), nunca `new Date()` ni
@@ -78,3 +83,20 @@ Swagger: `http://localhost:3000/api/docs`. Salud: `GET /api/salud`.
   global traduce 23505/23503 → 409, 23514 → 400 y lo demás → 500 sin detalles de la base.
 - **Swagger**: el plugin de la CLI documenta los `*.dto.ts` y `*.entity.ts`; se escribe
   `@ApiProperty` solo para `example`, enums o tipos que el plugin no infiere.
+
+## Auth (B4)
+- **Guard JWT global** (`seguridad/auth/guards/jwt-auth.guard.ts`, `APP_GUARD` en `AuthModule`):
+  toda ruta exige sesión salvo las `@Publico()` (login, salud), donde ni lee el token. Relee en
+  cada request usuario, negocio y `version_sesion` (401 si algo no cuadra). Con
+  `debe_cambiar_clave`, 403 salvo en rutas `@PermitidoConClaveTemporal()` (solo el cambio de
+  clave). Una ruta protegida con Swagger lleva `@ApiBearerAuth()`.
+- El usuario de la sesión sale del **contexto** (`RequestContextService`), nunca de un `:id` en la
+  ruta ni del body.
+- **`version_sesion`** (decisión 87): quien cambie la clave, la restablezca (B7) o active o
+  desactive la 2FA (B5) la sube; eso cierra las demás sesiones.
+- `seguridad/auth` lee `usuario` con un `Repository` normal (por login o por la PK del token):
+  corre antes de que haya negocio en el contexto. Fuera de ahí, `usuario` y `persona` se leen
+  con `NegocioRepository`.
+- E2E: una ruta de prueba se marca `@Publico()` o se llama con un token de
+  `POST /api/auth/login`; los usuarios se crean con `test/utils/usuarios-de-prueba.ts` (clave
+  aleatoria). Varios logins seguidos cuentan para el bloqueo: cada caso usa su propio usuario.

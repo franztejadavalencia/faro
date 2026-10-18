@@ -18,6 +18,18 @@ describe('RequestContextService', () => {
     });
   });
 
+  it('conserva ip y userAgent para la bitácora', () => {
+    servicio.ejecutarConContexto(
+      { ip: '10.0.0.1', userAgent: 'Mozilla/5.0' },
+      () => {
+        expect(servicio.obtenerContexto()).toMatchObject({
+          ip: '10.0.0.1',
+          userAgent: 'Mozilla/5.0',
+        });
+      },
+    );
+  });
+
   it('idNegocio null (plataforma) se ve como undefined', () => {
     servicio.ejecutarConContexto({ idUsuario: 3, idNegocio: null }, () => {
       expect(servicio.obtenerIdNegocio()).toBeUndefined();

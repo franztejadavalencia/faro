@@ -25,6 +25,7 @@ import { Persona } from './persona.entity';
   where: 'id_estado = 1',
 })
 @Check('ck_usuario_intentos_fallidos', `"intentos_fallidos" >= 0`)
+@Check('ck_usuario_version_sesion', `"version_sesion" >= 0`)
 export class Usuario extends BaseNegocioOpcionalEntity {
   @PrimaryGeneratedColumn({
     name: 'id_usuario',
@@ -78,4 +79,14 @@ export class Usuario extends BaseNegocioOpcionalEntity {
 
   @Column({ name: 'bloqueado_hasta', type: 'timestamptz', nullable: true })
   bloqueadoHasta!: Date | null;
+
+  /**
+   * Va en el JWT; el guard rechaza un token con otra versión (como el
+   * SecurityStamp de ASP.NET Identity). **Sube** al cambiar la clave (B4), al
+   * restablecerla (B7) y al activar o desactivar la 2FA (B5): cierra las demás
+   * sesiones. **No sube** al desbloquear (el bloqueo no corta sesiones) ni al
+   * desactivar al usuario (el guard ya revisa `id_estado`).
+   */
+  @Column({ name: 'version_sesion', type: 'integer', default: 0 })
+  versionSesion!: number;
 }
