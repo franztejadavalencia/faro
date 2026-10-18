@@ -2,6 +2,7 @@ import { DataSource, InsertEvent, UpdateEvent } from 'typeorm';
 import { BaseAnulableEntity } from '../entities/base-anulable.entity';
 import { BaseEntity } from '../entities/base.entity';
 import { BaseNegocioEntity } from '../entities/base-negocio.entity';
+import { BaseNegocioOpcionalEntity } from '../entities/base-negocio-opcional.entity';
 import { NegocioIncorrectoError } from '../errors/negocio-incorrecto.error';
 import {
   ContextoRequest,
@@ -12,6 +13,7 @@ import { AuditoriaSubscriber } from './auditoria.subscriber';
 class Simple extends BaseEntity {}
 class DeNegocio extends BaseNegocioEntity {}
 class Anulable extends BaseAnulableEntity {}
+class Opcional extends BaseNegocioOpcionalEntity {}
 
 const metadata = { name: 'Prueba' };
 
@@ -203,5 +205,50 @@ describe('AuditoriaSubscriber', () => {
         ),
       ).not.toThrow();
     });
+  });
+});
+
+describe('AuditoriaSubscriber con BaseNegocioOpcionalEntity (persona, usuario)', () => {
+  it('un contexto con negocio no crea filas de plataforma: pone el del contexto', () => {
+    const { subscriber, en } = armar();
+    const e = como(Opcional, { idNegocio: null });
+    en({ idUsuario: 5, idNegocio: 7 }, () =>
+      subscriber.beforeInsert(insertar(e)),
+    );
+    expect(e.idNegocio).toBe(7);
+  });
+
+  it('sin contexto (seed, admin) respeta el null de plataforma', () => {
+    const { subscriber } = armar();
+    const e = como(Opcional, { idNegocio: null });
+    subscriber.beforeInsert(insertar(e));
+    expect(e.idNegocio).toBeNull();
+  });
+
+  it('un contexto de plataforma (sin negocio) respeta el null', () => {
+    const { subscriber, en } = armar();
+    const e = como(Opcional, { idNegocio: null });
+    en({ idUsuario: 1, idNegocio: null }, () =>
+      subscriber.beforeInsert(insertar(e)),
+    );
+    expect(e.idNegocio).toBeNull();
+  });
+
+  it('un contexto con negocio no puede guardar una fila de plataforma', () => {
+    const { subscriber, en } = armar();
+    const e = como(Opcional, { idNegocio: null });
+    expect(() =>
+      en({ idUsuario: 5, idNegocio: 7 }, () =>
+        subscriber.beforeUpdate(actualizar(e, { idNegocio: null })),
+      ),
+    ).toThrow(NegocioIncorrectoError);
+  });
+
+  it('una fila de plataforma no pasa a un negocio', () => {
+    const { subscriber } = armar();
+    const e = como(Opcional, { idNegocio: 7 });
+    expect(() =>
+      subscriber.beforeUpdate(actualizar(e, { idNegocio: null })),
+    ).toThrow(NegocioIncorrectoError);
   });
 });

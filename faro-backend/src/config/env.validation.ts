@@ -84,6 +84,22 @@ export class VariablesEntorno {
   })
   TRUST_PROXY?: string;
 
+  /**
+   * Admin de plataforma (`npm run seed:admin`). Opcionales para la app: solo las
+   * exige el seed. En producción se borra `ADMIN_CLAVE` del `.env` tras sembrar.
+   */
+  @IsOptional()
+  @IsString()
+  ADMIN_USUARIO?: string;
+
+  @IsOptional()
+  @IsString()
+  ADMIN_CLAVE?: string;
+
+  @IsOptional()
+  @IsString()
+  ADMIN_NOMBRE?: string;
+
   /** Solo cuenta en producción: Swagger se publica allí solo con `true`. */
   @IsOptional()
   @IsIn(['', 'true', 'false'])

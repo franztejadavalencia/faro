@@ -37,6 +37,11 @@ Las tareas se revisan fuera de esta sesión, así que **nada importante queda so
    resultado del audit, mensaje de commit propuesto), pon `Estado: cerrada` y marca la tarea en
    `docs/tasks.md`. Un parche de seguridad del mismo minor se aplica solo si está en el plan de
    la tarea (decisión 74).
+5. **Editar el archivo de revisión.** Escribe solo en tu sección y ubícala por su comentario de
+   la plantilla (`<!-- Al cerrar… -->`, `<!-- Dudas que aparecen al aplicar. -->`). Nunca
+   reemplaces "desde un encabezado hasta el final": el texto `## Resultado` puede aparecer antes
+   (en B2b borró las Respuestas). Al terminar, comprueba que siguen todas las secciones de la
+   plantilla.
 
 Una tarea muy pequeña (un typo, un ajuste de una línea) puede saltarse el paso 1 si el
 usuario lo dice explícitamente.

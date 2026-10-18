@@ -7,7 +7,7 @@ import {
   Repository,
   SelectQueryBuilder,
 } from 'typeorm';
-import { BaseNegocioEntity } from '../entities/base-negocio.entity';
+import { BaseConNegocioEntity } from '../entities/base-con-negocio.entity';
 import { RequestContextService } from '../services/request-context.service';
 
 type Where<T> = FindOptionsWhere<T> | FindOptionsWhere<T>[];
@@ -30,7 +30,7 @@ const PARAMETRO_NEGOCIO = 'idNegocioContexto';
  * `relations` no se filtran aparte: entran por FK de la misma fila, y las
  * referencias que llegan en un DTO se validan con `requireActiveEntity`.
  */
-export class NegocioRepository<T extends BaseNegocioEntity> {
+export class NegocioRepository<T extends BaseConNegocioEntity> {
   constructor(
     private readonly repositorio: Repository<T>,
     private readonly contexto: RequestContextService,

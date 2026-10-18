@@ -31,6 +31,19 @@ describe('validarEntorno', () => {
     expect(() => validarEntorno(sinJwt)).toThrow(/JWT_SECRET/);
   });
 
+  it('las variables ADMIN_* son opcionales y se conservan si están', () => {
+    expect(validarEntorno(base).ADMIN_CLAVE).toBeUndefined();
+    const variables = validarEntorno({
+      ...base,
+      ADMIN_USUARIO: 'admin',
+      ADMIN_CLAVE: 'una-clave-larga',
+      ADMIN_NOMBRE: 'Administrador',
+    });
+    expect(variables.ADMIN_USUARIO).toBe('admin');
+    expect(variables.ADMIN_CLAVE).toBe('una-clave-larga');
+    expect(variables.ADMIN_NOMBRE).toBe('Administrador');
+  });
+
   it('rechaza un NODE_ENV desconocido', () => {
     expect(() => validarEntorno({ ...base, NODE_ENV: 'staging' })).toThrow(
       /NODE_ENV/,

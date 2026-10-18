@@ -46,6 +46,9 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
 9. **Sin `persona` de SIAP tal cual**: FARO tiene su propia `persona` por negocio
    (decisión 43, `architecture.md` §7). Lo que en SIAP sale de `institucion` (unidad
    organizacional, asignación de personal, rol operativo) no se porta.
+10. **SIAP está en Nest 10 y FARO en Nest 11** (decisión 79, B2b). El código de SIAP se porta casi
+    directo; al copiar una ruta o un middleware se revisan los comodines (`*` → `*splat`) y
+    cualquier lectura de `req.query` con corchetes (Express 5, `query parser` simple).
 
 ## Backend
 
@@ -54,6 +57,7 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
 |---|---|---|---|
 | `entities/base.entity.ts` | ~ | `strict` (campos con `!`); `timestamptz` en las fechas técnicas (decisión 75); regla 3. Hecho en B2, con barrel `entities/index.ts` | B2 |
 | `entities/base-anulable.entity.ts` | ~ | Extiende `BaseNegocioEntity` (nueva); `fecha_anulacion` `timestamptz`. Hecho en B2 | B2 |
+| — | nuevo | `base-con-negocio.entity.ts` (sin columna) y `base-negocio-opcional.entity.ts` (nullable) para `persona`, `usuario` y `rol_usuario`: una subclase no puede redeclarar una columna heredada (decisión 81). Hecho en B3 | B3 |
 | `services/request-context.service.ts` | ~ | Suma `idNegocio` y `obtenerIdNegocio()`. Hecho en B2 | B2 |
 | `subscribers/auditoria.subscriber.ts` | ~ | Pone `id_negocio` del contexto al insertar y rechaza uno distinto; en update rechaza otro negocio y cambiar el `id_negocio` (`architecture.md` §6, decisión 77); sin `any`. Hecho en B2 | B2 |
 | `interceptors/contexto-request.interceptor.ts` | ~ | Tipo de payload propio de `common` (`types/payload-token.ts`); suma `idNegocio`. Hecho en B2 | B2 |
@@ -84,7 +88,7 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
 | `seguridad/auth/controllers/auth.controller.ts`, `dto/login.dto.ts` | ~ | `POST /auth/login` (SIAP: `POST /auth`) | B4 |
 | `seguridad/auth/types/response-login.interface.ts` | ✗ | Contrato nuevo (§11) | B4 |
 | `seguridad/auth/auth.module.ts` | ~ | `JWT_SECRET` desde `ConfigService` | B4 |
-| `abc/usuario/entities/usuario.entity.ts` | ~ | `id_persona` a la `persona` de FARO; `id_negocio`; `debe_cambiar_clave`; `totp_secreto` (cifrado), `totp_activo`; índice único global `lower(usuario)` con `id_estado = 1` (decisiones 43, 48 y 50) | B3 |
+| `abc/usuario/entities/usuario.entity.ts` | ~ | `id_persona` a la `persona` de FARO; `id_negocio`; `debe_cambiar_clave`; `totp_secreto` (cifrado), `totp_activo`; índice único global `lower(usuario)` con `id_estado = 1` (decisiones 43, 48 y 50). Hecho en B3 (`BaseNegocioOpcionalEntity`, `totp_secreto` cifrado y `select: false`; sin `id_rol_usuario`, que llega con B6, decisión 85) | B3 |
 | `abc/usuario/services/usuario.service.ts` | ~ | Sin `CLAVE_POR_DEFECTO = '1234'`: clave temporal del dueño (mín. 8) y restablecer clave (decisión 48); `findManyByStatus` usa el filtro (SIAP lo ignora); `changeClave` con `save()`; `findAllDetalle` sin `CONCAT` | B4 (`changeClave`) / B7 |
 | `abc/usuario/controllers/`, `dto/` (incl. `change-clave.dto.ts`), `types/`, `usuario.module.ts` | ~ | Sin `InstitucionModule`; `PartialType` desde `@nestjs/swagger` | B4 (`change-clave`) / B7 |
 | `abc/permiso/entities/rol-usuario.entity.ts` | ~ | `id_negocio` (null en plataforma); único `(id_negocio, nombre)`; marca de rol fijo (Dueño) (decisión 44) | B6 |

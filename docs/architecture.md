@@ -7,7 +7,7 @@
 
 ## 1. Versiones
 
-Son las instaladas hoy en SIAP (decisión 3), leídas de `node_modules/<paquete>/package.json`.
+Son las instaladas hoy en SIAP (decisión 3), salvo `typeorm` (decisión 74) y Nest (11, decisión 79), leídas de `node_modules/<paquete>/package.json`.
 Se fijan **exactas**, sin `^` ni `~`, con `save-exact=true` en el `.npmrc` de cada aplicación
 (decisión 25).
 
@@ -21,17 +21,16 @@ Se fijan **exactas**, sin `^` ni `~`, con `save-exact=true` en el `.npmrc` de ca
 ### Backend (`faro-backend`)
 | Paquete | Versión |
 |---|---|
-| @nestjs/core, @nestjs/testing | 10.4.4 |
-| @nestjs/common, @nestjs/platform-express | 10.4.17 |
-| @nestjs/cli | 10.4.5 |
-| @nestjs/typeorm | 10.0.2 |
-| @nestjs/jwt | 12.0.1 |
-| @nestjs/swagger | 7.4.2 |
-| @nestjs/config | 3.2.3 |
+| @nestjs/common, @nestjs/core, @nestjs/platform-express, @nestjs/testing | **11.2.7** (SIAP: 10.4.x). Nest 11 por la decisión 79 (B2b); sobre Express 5.2.1 y `path-to-regexp` 8 |
+| @nestjs/cli | 11.0.24 (trae su propio `typescript` 5.9.3 anidado; `nest build` usa el 5.6.3 del proyecto porque resuelve desde `process.cwd()`) |
+| @nestjs/typeorm | 11.0.3 |
+| @nestjs/jwt | 12.0.1 (B4 la instala; su peer admite Nest 8 a 12, B4 confirma la versión) |
+| @nestjs/swagger | 11.4.7 |
+| @nestjs/config | 4.0.4 |
 | typeorm | **0.3.31** (SIAP: 0.3.20). Parche de seguridad del mismo minor (decisión 74, B2): cierra la inyección SQL en `repository.save`/`update` y en `migration:generate`. Desde 0.3.23, `update({}, …)` y `delete({})` con criterio vacío lanzan error |
 | pg | 8.13.0 |
 | class-validator / class-transformer | 0.14.1 / 0.5.1 |
-| bcrypt | 5.1.1 |
+| bcrypt / @types/bcrypt | **6.0.0** / 6.0.0 (SIAP: 5.1.1; decisión 80). Instaladas en B3. 6.0.0 trae binarios precompilados (incluye `win32-x64`) y deja `@mapbox/node-pre-gyp`, cuya `tar` vulnerable dejaba 5 hallazgos (1 crítica) en `npm audit`; mismo formato `$2b$`, así que los hashes son compatibles con SIAP. Costo 12 (`seguridad/constants/clave.constants.ts`) |
 | reflect-metadata | 0.2.2 |
 | dotenv | 16.4.5 (declarada como dependencia directa; en SIAP llega transitiva) |
 | rxjs | 7.8.1 |
@@ -42,21 +41,21 @@ Se fijan **exactas**, sin `^` ni `~`, con `save-exact=true` en el `.npmrc` de ca
 | eslint / prettier | 8.57.1 / 3.5.3 |
 | @typescript-eslint/eslint-plugin, @typescript-eslint/parser | 8.8.1 |
 | eslint-config-prettier / eslint-plugin-prettier | 9.1.0 / 5.2.1 |
-| @nestjs/schematics | 10.1.4 |
-| @types/jest / @types/node / @types/express / @types/supertest | 29.5.13 / 20.16.11 / 4.17.21 / 6.0.2 |
+| @nestjs/schematics | 11.1.0 |
+| @types/jest / @types/node / @types/express / @types/supertest | 29.5.13 / 20.16.11 / **5.0.6** / 6.0.2 |
 | ts-node / tsconfig-paths / cross-env / source-map-support | 10.9.2 / 4.2.0 / 7.0.3 / 0.5.21 |
 
 Cada tarea instala solo lo que usa (B1): `bcrypt` llega en B3 y `@nestjs/jwt` en B4, con la
 versión de esta tabla. No se instalan `ts-node-dev` (§14), `typeorm-ts-node-commonjs` (la CLI de
 TypeORM corre con `ts-node -r tsconfig-paths/register`) ni `swagger-ui-express`
-(`@nestjs/swagger` 7 trae `swagger-ui-dist`).
+(`@nestjs/swagger` 11 trae `swagger-ui-dist`).
 
 **Parches de seguridad** (decisión 74): los del mismo minor se aplican en FARO aunque se aparten
 de SIAP, siempre dentro del plan de la tarea que los detecta. Cada tarea corre
-`npm audit --omit=dev` al cerrar y anota el resultado. Tras B2 quedan 15 hallazgos (6 altas,
-9 moderadas) en `@nestjs/*`, `express`, `multer`, `lodash`, `js-yaml` y el `uuid` de
-`@nestjs/typeorm`; `npm audit` solo los resuelve con Nest 11/12 (cambio mayor, fuera de la
-decisión 74).
+`npm audit --omit=dev` al cerrar y anota el resultado. Tras B2 había 15 hallazgos (6 altas,
+9 moderadas); la subida a Nest 11 (B2b, decisión 79) los reduce a **2 moderadas**, ambas el
+`js-yaml` 5.3.0 de `@nestjs/swagger` (GHSA-r3ph-w7gj-g6xm). Se aceptan: Swagger está apagado
+en producción (decisión 70). Se resuelve con Nest 12, que se reevalúa antes del despliegue.
 
 ### Frontend (`faro-frontend`)
 | Paquete | Versión |
@@ -91,7 +90,10 @@ tarea que lo instala.
   - `faro_test`: tests e2e (creada en B1). Los e2e vacían tablas: nunca se apuntan a
     `faro_dev`. El setup de los e2e se niega a correr si `DB_NAME` no termina en `_test`.
 - Usuario de base: en desarrollo, `postgres` local. **Pendiente para el despliegue**: un usuario
-  propio `faro` con permisos solo sobre sus bases (B1).
+  propio `faro` con permisos solo sobre sus bases (B1). Ese usuario **no es dueño de las tablas** y no
+  tiene `TRUNCATE` ni `ALTER` sobre `bitacora` (B3) ni sobre `asiento` y `asiento_detalle` (D3): el
+  trigger de solo inserción no protege del dueño de la tabla, que puede desactivarlo. En
+  desarrollo y prueba sigue `postgres`, porque `limpiarBase()` necesita `TRUNCATE`.
 - Variables de entorno en `faro-backend/`:
 
   | Archivo | Uso | Git |
@@ -122,8 +124,15 @@ tarea que lo instala.
   - `TRUST_PROXY`: vacío = sin proxy (`request.ip`); con valor va a `trust proxy` de Express
     (número de proxies, `loopback`, IPs o subredes). `true` y `false` se rechazan (decisión 51).
   - `SWAGGER`: solo cuenta en `production` (ver abajo).
-  - `TOTP_CLAVE_CIFRADO` es opcional hasta B5. Las variables de tareas futuras (clave del admin
-    de la seed en B3, `DEMO_CLAVE` en D15) las agrega cada tarea.
+  - `TOTP_CLAVE_CIFRADO` es opcional hasta B5. Las variables de tareas futuras (`DEMO_CLAVE` en D15)
+    las agrega cada tarea.
+  - `ADMIN_USUARIO`, `ADMIN_CLAVE` y `ADMIN_NOMBRE` (B3): opcionales para la app, las exige solo
+    `npm run seed:admin`. `ADMIN_CLAVE`: mínimo 8 caracteres y máximo 72 **bytes** (bcrypt ignora el
+    resto). El admin se siembra con un script, no con una migración (decisión 82): es idempotente
+    y no pisa una clave existente. En `production` nace con `debe_cambiar_clave = true` y, tras
+    sembrar, se borra `ADMIN_CLAVE` de `.env.production` (OWASP ASVS V2.3.1); en `development` y
+    `test` nace con `false`. Los e2e no necesitan estas variables: llaman a
+    `sembrarAdminPlataforma()` con una clave generada en el propio test.
 - **Credenciales reales solo en los `.env.*` ignorados.** Nunca en `docs/`, en el código ni en
   los tests.
 - `.gitignore` en la raíz del repo (decisión 42): `node_modules/`, `dist/`, `.angular/`,
@@ -270,7 +279,8 @@ En la preliminar, a nivel de aplicación. Row-Level Security de Postgres queda p
 completa.
 
 - Toda tabla de un negocio tiene `id_negocio` (FK a `negocio`) y hereda de `BaseNegocioEntity`
-  (que extiende `BaseEntity`).
+  (`NOT NULL`). Solo `persona`, `usuario` y `rol_usuario`, que pueden ser de plataforma, heredan de
+  `BaseNegocioOpcionalEntity` (nullable). Ambas cuelgan de `BaseConNegocioEntity` (decisión 81).
 - El JWT lleva `{ idUsuario, idNegocio }`. `RequestContextService` (AsyncLocalStorage de SIAP)
   suma `idNegocio` a `{ idUsuario, ip, url, metodo }`.
 - **El filtro por `id_negocio` vive en una base común y no se escribe a mano en cada consulta**:
@@ -315,9 +325,15 @@ completa.
 - `BaseEntity`: `fecha_registro`, `fecha_modificacion`, `id_estado` (1 = activo),
   `usuario_registro`, `usuario_modificacion` (como SIAP, `integer` sin FK). Las fechas técnicas
   son **`timestamptz`** (decisión 75; SIAP usa `timestamp` sin zona).
-- `BaseNegocioEntity extends BaseEntity`: `id_negocio` (NOT NULL). Solo la columna: la FK a
-  `negocio` la declara cada entidad concreta. `persona`, `usuario` y `rol_usuario`, que admiten
-  `id_negocio` nulo (plataforma), **redeclaran** la columna como nullable.
+- `BaseConNegocioEntity extends BaseEntity` (abstracta, **sin columna**): lo que miran
+  `AuditoriaSubscriber` (`instanceof`) y `NegocioRepository` (genérico). TypeORM conserva la
+  primera columna registrada de cada propiedad —la de la clase padre—, así que una subclase no
+  puede redeclarar una columna heredada (decisión 81): la columna la ponen las dos bases
+  concretas.
+- `BaseNegocioEntity extends BaseConNegocioEntity`: `id_negocio` (NOT NULL). Solo la columna: la
+  FK a `negocio` la declara cada entidad concreta.
+- `BaseNegocioOpcionalEntity extends BaseConNegocioEntity`: `id_negocio` nullable (plataforma).
+  Solo para `persona`, `usuario` y `rol_usuario`; cualquier otra tabla lo justifica en su revisión.
 - `BaseAnulableEntity extends BaseNegocioEntity`: `anulado`, `fecha_anulacion` (`timestamptz`),
   `usuario_anulacion`, `motivo_anulacion varchar(500)`.
 - Se importan de `@common/entities` (barrel); la regla de ESLint prohíbe `BaseEntity` de
@@ -418,23 +434,27 @@ erDiagram
   (decisión 37). Se toma con `pessimistic_write` dentro de la transacción del documento.
 
 ### Seguridad (decisiones 43 a 51; base SIAP, `docs/base-desde-siap.md`)
-- `persona` (`BaseNegocioEntity`): ficha única por negocio, como `res.partner` de Odoo. Una
+- `persona` (`BaseNegocioOpcionalEntity`): ficha única por negocio, como `res.partner` de Odoo. Una
   persona puede ser a la vez empleado con usuario y proveedor (y cliente en la versión
   completa). La ficha de un negocio no la ve otro, aunque sea la misma persona real. Las
   personas de los usuarios de plataforma tienen `id_negocio = null`.
   - `tipo` (`NATURAL` | `JURIDICA`), `nombre` (o razón social), `paterno` y `materno`
     (opcionales, solo naturales), `tipo_documento` (`CI` | `NIT` | `OTRO`), `documento`,
     `correo` y `telefono` (opcionales).
-  - Único `(id_negocio, tipo_documento, documento)` cuando hay documento.
+  - Único `(id_negocio, tipo_documento, documento)` cuando hay documento y `id_estado = 1`.
+    `CHECK`: tipo y número de documento van juntos o ninguno; `paterno` y `materno` solo en
+    `NATURAL`. Estados de dominio como `varchar` + `CHECK`, no `ENUM` de Postgres.
   - El nombre para mostrar sale de un helper `nombreCompleto(persona)`, no de un `CONCAT`
     repetido en cada consulta.
-- `usuario` (`BaseNegocioEntity`; `id_negocio = null` en plataforma): `usuario` (login),
-  `clave` (bcrypt, `select: false`), `id_persona` (obligatorio), `id_rol_usuario`,
-  `debe_cambiar_clave`, `totp_secreto` (cifrado, nullable), `totp_activo`, `totp_ultimo_paso`
+- `usuario` (`BaseNegocioOpcionalEntity`; `id_negocio = null` en plataforma): `usuario` (login),
+  `clave` (bcrypt, `select: false`), `id_persona` (obligatorio), `id_rol_usuario` (**llega con
+  B6**, que crea el rol de plataforma, se lo asigna al admin y recién entonces pone `NOT NULL` y
+  la FK; decisión 85), `debe_cambiar_clave`, `totp_secreto` (`text`, `select: false`: guarda el
+  texto **cifrado**, nunca el secreto; el formato lo define B5), `totp_activo`, `totp_ultimo_paso`
   (antirreúso), `intentos_fallidos` y `bloqueado_hasta` (bloqueo temporal, decisión 53).
   - **Excepción a §4**: el login es **único en toda la plataforma**, no por negocio, porque el
     login no pide el negocio. Índice único sobre `lower(usuario)` con `id_estado = 1`.
-  - `usuario_codigo_respaldo (id_usuario, hash, usado_en)`: códigos de respaldo de la 2FA, de
+  - `usuario_codigo_respaldo (id_usuario, hash, usado_en, fecha_registro)`: códigos de respaldo de la 2FA, de
     un solo uso (P, decisión 50).
 - `rol_usuario`: `id_negocio` (null en plataforma), `nombre`, `descripcion` y `es_fijo`. Único
   `(id_negocio, nombre)`. El rol **Dueño** (`es_fijo = true`) viene de la seed con todos los
@@ -447,7 +467,12 @@ erDiagram
 - `bitacora` (decisión 51): `id_negocio` (nullable para eventos de plataforma), `id_usuario`
   (nullable: login fallido), `evento`, `detalle` (`jsonb`), `ip`, `user_agent`, `url`,
   `metodo` y `fecha`. **Solo inserción**: mismo trigger `BEFORE UPDATE OR DELETE` que los
-  asientos (§7 Contabilidad).
+  asientos (§7 Contabilidad): la función genérica `fn_solo_insercion()` (SQLSTATE `23001`, que el
+  filtro global responde 500) la reutiliza D3. No hereda de ninguna base, así que
+  `NegocioRepository` no la acepta (decisión 84): toda lectura y escritura pasa por un único
+  `BitacoraService` (`registrar` en B4, `consultar` en B7) que toma `idNegocio` e `idUsuario` **del
+  contexto**, nunca del DTO ni de la ruta, y falla cerrado (403) sin `idNegocio` en `consultar`.
+  Solo `plataforma/` lee la bitácora de varios negocios (D14).
 
 ### Catálogo
 - `proveedor`: `id_persona` (único por negocio) y solo los datos comerciales (p. ej. notas).
@@ -787,5 +812,8 @@ Paleta **definitiva** (decisión 23, mockup aprobado en A6):
 | 17 | `BaseEntity` con `timestamp without time zone` | `timestamptz` | Decisión 75; en SIAP, L12 de `pendientes-siap.md` |
 | 18 | `fechaHoy()` lee `new Date()`; `Repository` filtrado a mano por institución | `Reloj` inyectable y `fechaDe()` pura; `NegocioRepository` con falla cerrado | Decisiones 61, 76 y 77 |
 | 19 | Sin plugin de Swagger en `nest-cli.json` | Plugin activo (`classValidatorShim`, `introspectComments`) | Decisión 78 |
+| 20 | Nest 10.4 (Express 4, `query parser` extendido) | Nest 11.2.7 (Express 5, `query parser` simple) | Decisión 79: Nest 10 no recibe parches; 15 avisos de `npm audit` pasan a 2 |
+| 21 | `bcrypt` ^5.1.1 (arrastra `tar` vulnerable por `node-pre-gyp`) | `bcrypt` 6.0.0 | Decisión 80: 5 hallazgos de `npm audit` con 5.1.1 (1 crítica) frente a los 2 aceptados |
+| 22 | `BaseEntity` sin tenant (SIAP no lo tiene) | `BaseConNegocioEntity` con `BaseNegocioEntity` (NOT NULL) y `BaseNegocioOpcionalEntity` (nullable) | Decisión 81: TypeORM no deja redeclarar columnas heredadas |
 El inventario de lo que se porta, con sus dependencias ocultas, está en
 `docs/base-desde-siap.md` (corregido en A4).

@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 import { BaseAnulableEntity } from '../entities/base-anulable.entity';
 import { BaseEntity } from '../entities/base.entity';
-import { BaseNegocioEntity } from '../entities/base-negocio.entity';
+import { BaseConNegocioEntity } from '../entities/base-con-negocio.entity';
 import { NegocioIncorrectoError } from '../errors/negocio-incorrecto.error';
 import { RequestContextService } from '../services/request-context.service';
 
@@ -37,7 +37,7 @@ export class AuditoriaSubscriber implements EntitySubscriberInterface {
       entidad.usuarioRegistro = idUsuario;
     }
 
-    if (entidad instanceof BaseNegocioEntity) {
+    if (entidad instanceof BaseConNegocioEntity) {
       const idNegocio = this.requestContext.obtenerIdNegocio();
       // Sin negocio en el contexto (registro público, seed, plataforma) manda el
       // valor de la entidad; si falta, lo rechaza el NOT NULL.
@@ -57,10 +57,10 @@ export class AuditoriaSubscriber implements EntitySubscriberInterface {
     const entidad = event.entity;
     if (!entidad || !(entidad instanceof BaseEntity)) return;
 
-    if (entidad instanceof BaseNegocioEntity) {
+    if (entidad instanceof BaseConNegocioEntity) {
       this.verificarNegocioEnUpdate(
         entidad,
-        event.databaseEntity as Partial<BaseNegocioEntity> | undefined,
+        event.databaseEntity as Partial<BaseConNegocioEntity> | undefined,
         event.metadata.name,
       );
     }
@@ -84,8 +84,8 @@ export class AuditoriaSubscriber implements EntitySubscriberInterface {
    * sesión de un negocio, solo se guarda una fila de ese negocio.
    */
   private verificarNegocioEnUpdate(
-    entidad: BaseNegocioEntity,
-    enBase: Partial<BaseNegocioEntity> | undefined,
+    entidad: BaseConNegocioEntity,
+    enBase: Partial<BaseConNegocioEntity> | undefined,
     nombre: string,
   ): void {
     if (!enBase) return;

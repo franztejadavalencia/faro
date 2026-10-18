@@ -5,6 +5,8 @@ import { validarEntorno, VariablesEntorno } from './config/env.validation';
 import { opcionesTypeOrm } from '@database/typeorm.config';
 import { CommonModule } from './common/common.module';
 import { SaludModule } from './salud/salud.module';
+import { PlataformaModule } from '@plataforma/plataforma.module';
+import { SeguridadModule } from '@seguridad/seguridad.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { SaludModule } from './salud/salud.module';
     }),
     CommonModule,
     SaludModule,
+    PlataformaModule,
+    SeguridadModule,
   ],
 })
 export class AppModule {}

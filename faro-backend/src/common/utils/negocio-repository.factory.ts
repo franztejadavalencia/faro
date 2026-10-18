@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager, EntityTarget } from 'typeorm';
-import { BaseNegocioEntity } from '../entities/base-negocio.entity';
+import { BaseConNegocioEntity } from '../entities/base-con-negocio.entity';
 import { RequestContextService } from '../services/request-context.service';
 import { NegocioRepository } from './negocio.repository';
 
@@ -17,7 +17,7 @@ export class NegocioRepositoryFactory {
     private readonly contexto: RequestContextService,
   ) {}
 
-  para<T extends BaseNegocioEntity>(
+  para<T extends BaseConNegocioEntity>(
     entidad: EntityTarget<T>,
     manager?: EntityManager,
   ): NegocioRepository<T> {

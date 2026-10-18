@@ -48,16 +48,33 @@ Backend (B) y frontend (F). Pueden avanzar en paralelo cuando haya contrato.
         de utils, transformer, `Reloj`, `NegocioRepository` y filtro (23505→409, 23514→400,
         resto→500) en verde · cerrada 2026-10-17 (decisiones 74 a 78; subió `typeorm` a
         0.3.31, decisión 74)
-- [ ] B3 · `negocio` mínimo (id, nombre, estado) + `persona` + `usuario` + `bitacora` (con
-        trigger de solo inserción) + migraciones + seed del admin de plataforma (clave desde
-        `.env`) · migraciones suben y bajan; e2e: el trigger rechaza UPDATE/DELETE en
-        `bitacora`; el índice `lower(usuario)` rechaza un duplicado global
+- [x] B2b · Subir a Nest 11 (decisión 79): `@nestjs/common`, `core`, `platform-express` y
+        `testing` 11.2.x; `@nestjs/config` 4, `@nestjs/swagger` 11, `@nestjs/typeorm` 11,
+        `@nestjs/cli` y `schematics` 11; `@types/express` 5. Revisar Express 5 (comodines de
+        ruta `*` → `*splat`, `path-to-regexp` 8, `query parser`) y el orden de lectura de
+        variables en `config` 4; versiones exactas y anotadas en `architecture.md` §1; S6 de
+        `pendientes-siap.md` con los números nuevos · `lint`, `test`, `build`, `migration:run`
+        (`:test`) y `test:e2e` en verde; `start:dev` levanta, `/api/salud` y `/api/docs`
+        responden; `npm audit --omit=dev` con 2 o menos (solo `js-yaml` de `@nestjs/swagger`)
+- [x] B3 · `negocio` mínimo (id, nombre, estado) + `persona` + `usuario` (con las columnas
+        `totp_*` y `usuario_codigo_respaldo` de la decisión 50) + `bitacora` (con trigger de solo
+        inserción) + migraciones + seed del admin de plataforma (`npm run seed:admin`, clave
+        desde `.env`) + bases `BaseConNegocioEntity` / `BaseNegocioOpcionalEntity` en `common/`
+        (decisión 81) · migraciones suben y bajan; e2e: el trigger rechaza UPDATE/DELETE en
+        `bitacora`; el índice `lower(usuario)` rechaza un duplicado global · cerrada 2026-10-17
+        (decisiones 80 a 85)
 - [ ] B4 · Auth: `POST /api/auth/login` (respuesta de `architecture.md` §11 con `estado`), JWT,
         `JwtAuthGuard` en `seguridad/` (estado de usuario y negocio, `debe_cambiar_clave` →
         403), cambio de clave, bloqueo temporal (decisión 53), bitácora de login (Opus) · e2e: login
         OK, 401 con clave mala, bloqueo al 5.º fallo y desbloqueo pasados los 15 min (el e2e
         escribe `bloqueado_hasta` en el pasado: es seguridad, usa la hora real), 403 con
-        `debe_cambiar_clave`, usuario desactivado y negocio suspendido → 401
+        `debe_cambiar_clave`, usuario desactivado y negocio suspendido → 401. Incluye además (de la
+        revisión de B3): (1) los métodos de `NegocioRepository` devuelven el 403 sin `idNegocio` como
+        **promesa rechazada**, no como excepción síncrona (unit: `find()` sin contexto rechaza);
+        (2) `ADMIN_CLAVE` vacía en `.env.example` (un valor de ejemplo copiado a un `.env` real
+        sería una clave conocida); (3) en `architecture.md` §2, pendiente del despliegue: hoy
+        `seed:admin` fija `NODE_ENV=development`, usa `ts-node` y el glob `src/**/*.entity.ts`, así
+        que no corre en producción ni prueba el `debe_cambiar_clave = true` (decisión 82)
 - [ ] B5 · 2FA TOTP (decisión 50): `/auth/2fa/configurar` y `/verificar` con token temporal,
         secreto cifrado, URI `otpauth://` y QR (PNG en data URL desde el backend), códigos de
         respaldo con hash, antirreúso `totp_ultimo_paso`, obligatoria para el admin; instalar y
@@ -65,8 +82,10 @@ Backend (B) y frontend (F). Pueden avanzar en paralelo cuando haya contrato.
         reúso de un paso rechazado; un token temporal no sirve en otras rutas; un código de
         respaldo sirve una sola vez
 - [ ] B6 · Permisos: `modulo_sistema`/`opcion_modulo_sistema` por migración (opciones de la
-        decisión 49; módulos de spec §4), `rol_usuario` por negocio con Dueño fijo,
-        `permiso_rol_usuario`, menú por rol, `@RequierePermiso` + `PermisoGuard`, utilidad para
+        decisión 49; módulos de spec §4), `rol_usuario` por negocio con Dueño fijo (hereda de
+        `BaseNegocioOpcionalEntity`) y el rol de plataforma, `usuario.id_rol_usuario` (asigna el
+        rol al admin y recién entonces `NOT NULL` + FK, decisión 85), `permiso_rol_usuario`, menú
+        por rol, `@RequierePermiso` + `PermisoGuard`, utilidad para
         omitir costos sin `ver_costos` · e2e: menú por rol; 403 sin permiso; no se puede editar
         el rol Dueño; una respuesta de prueba omite el costo sin `ver_costos`
 - [ ] B7 · Usuarios del negocio: CRUD de empleados sobre `persona` (buscar o crear), clave
@@ -185,7 +204,7 @@ Backend `D` (dominio) y frontend `V` (vistas) (decisión 62). Cada V va después
 - [ ] V12 · Admin de plataforma: negocios, suspender, restablecer y desbloquear, **consulta de
         la bitácora de plataforma** · contra D14
 
-**Orden sugerido**: B1–B7 y F1–F6 en paralelo cuando haya contrato → D1, D2, V1 → D3 → D4, V2
+**Orden sugerido**: B1, B2, B2b, B3–B7 y F1–F6 en paralelo cuando haya contrato → D1, D2, V1 → D3 → D4, V2
 → D5, D6, V3 → D7, V4 → D8, V5, V6 → D9, V7 → D10, V8 → D11, V9 → D12, V10 → D13, V11 → D14,
 V12 → D15 → D16.
 
