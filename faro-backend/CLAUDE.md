@@ -99,7 +99,7 @@ Swagger: `http://localhost:3000/api/docs`. Salud: `GET /api/salud`.
 - `seguridad/auth` lee `usuario` con un `Repository` normal (por login o por la PK del token):
   corre antes de que haya negocio en el contexto. Fuera de ahí, `usuario` y `persona` se leen
   con `NegocioRepository`.
-- E2E: una ruta de prueba se marca `@Publico()` o se llama con un token de
+- E2E: una ruta de prueba se marca `@Publico()` o `@SoloAutenticado()` y se llama con un token de
   `POST /api/auth/login`; los usuarios se crean con `test/utils/usuarios-de-prueba.ts` (clave
   aleatoria). Varios logins seguidos cuentan para el bloqueo: cada caso usa su propio usuario.
 
@@ -120,3 +120,29 @@ Swagger: `http://localhost:3000/api/docs`. Salud: `GET /api/salud`.
 - E2E: `test/utils/totp-de-prueba.ts` genera los códigos con otplib (`codigoTotp`,
   `secretoDeUri`). Un admin de prueba recibe `CONFIGURAR_2FA`: enrólalo por la API (ver
   `test/dos-factores.e2e-spec.ts`).
+
+## Permisos (B6)
+- Diseño y contrato: `architecture.md` §7 y §11 (decisiones 99 y 100). Todo vive en
+  `seguridad/permiso/`.
+- **Denegar por defecto**: toda ruta lleva `@Publico()`, `@SoloAutenticado()` (acciones de la
+  propia cuenta) o `@RequierePermiso(MODULOS.X, OPCIONES.Y)`; sin ninguna, `PermisoGuard` responde
+  403 y `src/rutas-con-permiso.spec.ts` hace fallar `npm test`. Los códigos salen de `MODULOS` y
+  `OPCIONES` (no compila uno que no exista). El permiso se consulta en cada request; no va en el
+  JWT.
+- **Costos**: una respuesta con costo, margen o valor de inventario lleva
+  `@OmitirSinVerCostos(MODULOS.X, ['campo', ...])` con la lista de claves explícita (decisión 100).
+- **Un módulo o una opción nueva es una migración propia** que inserta el módulo, sus pares en
+  `modulo_opcion_sistema` y llama a `otorgarARolesFijos(queryRunner, 'codigo')`
+  (`src/database/utils/`), para que el Dueño de cada negocio y el rol de plataforma lo reciban; se
+  suma también a `constants/catalogo.ts` y a `MODULOS`. El e2e «todo rol fijo tiene todos los
+  pares de su ámbito» falla si se olvida. No se edita la migración `Permisos`.
+- **Roles de un negocio nuevo**: `crearRolesIniciales(manager, idNegocio)` (D2 lo llama dentro de
+  la transacción del registro). El rol de plataforma lo repone `asegurarRolPlataforma`.
+- Los permisos de un rol solo se tocan tras resolver el rol con `NegocioRepository` (404 si es de
+  otro negocio). Un `PUT` de permisos no concede ni quita lo que el rol del editor no tiene
+  (anti-escalada); B7 aplica la misma regla al asignar un rol a un usuario.
+- E2E: `crearUsuarioDePrueba` asigna rol (`rol: 'DUENO' | 'EMPLEADO'`, por defecto Dueño; el
+  rol de plataforma si no hay negocio). `limpiarBase()` **no** vacía las tres tablas de catálogo
+  (`TABLAS_DE_CATALOGO`) y repone el rol de plataforma. Para un usuario con permisos exactos,
+  ver `conPermisos` en `test/permisos.e2e-spec.ts`.
+- Un alias nuevo de `tsconfig.json` se escribe con `./src/...` (sin `baseUrl`, decisión 101).

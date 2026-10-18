@@ -1,6 +1,7 @@
 import { DataSource } from 'typeorm';
 import { Persona } from '@seguridad/entities/persona.entity';
 import { Usuario } from '@seguridad/entities/usuario.entity';
+import { asegurarRolPlataforma } from '@seguridad/permiso/utils/roles-iniciales';
 import { errorDeClave, hashearClave } from '@seguridad/utils/clave';
 
 export interface DatosAdminPlataforma {
@@ -17,7 +18,7 @@ export interface DatosAdminPlataforma {
 export type ResultadoSeedAdmin = 'creado' | 'existente';
 
 /**
- * Crea al administrador de plataforma (persona y usuario sin negocio). Es
+ * Crea al administrador de plataforma (persona y usuario sin negocio, con el rol de plataforma). Es
  * **idempotente**: si ya hay un usuario activo con ese login (sin distinguir
  * mayúsculas) no hace nada y **no pisa su clave**. Corre fuera de una petición,
  * sin contexto, así que `AuditoriaSubscriber` respeta el `idNegocio` nulo.
@@ -54,12 +55,14 @@ export async function sembrarAdminPlataforma(
         telefono: null,
       }),
     );
+    const idRolUsuario = await asegurarRolPlataforma(manager);
     await manager.save(
       manager.create(Usuario, {
         idNegocio: null,
         usuario,
         clave: await hashearClave(datos.clave),
         idPersona: persona.idPersona,
+        idRolUsuario,
         debeCambiarClave: datos.debeCambiarClave,
       }),
     );

@@ -9,14 +9,14 @@ import {
 } from 'typeorm';
 import { BaseNegocioOpcionalEntity } from '@common/entities';
 import { Negocio } from '@plataforma/entities/negocio.entity';
+import { RolUsuario } from '../permiso/entities/rol-usuario.entity';
 import { Persona } from './persona.entity';
 
 /**
  * El login es único en **toda la plataforma** (decisión 43): el login no pide
  * el negocio. Lo garantiza el índice `uq_usuario_login` sobre `lower(usuario)`,
  * que vive en la migración (TypeORM no declara índices de expresión; el
- * `synchronize: false` lo excluye del `migration:generate`). `id_rol_usuario`
- * llega con B6.
+ * `synchronize: false` lo excluye del `migration:generate`).
  */
 @Entity('usuario')
 @Index('uq_usuario_login', { synchronize: false })
@@ -57,6 +57,17 @@ export class Usuario extends BaseNegocioOpcionalEntity {
     foreignKeyConstraintName: 'fk_usuario_persona',
   })
   persona?: Persona;
+
+  /** Un usuario tiene un rol (el del negocio, o el de plataforma del admin). */
+  @Column({ name: 'id_rol_usuario', type: 'integer' })
+  idRolUsuario!: number;
+
+  @ManyToOne(() => RolUsuario, { nullable: false })
+  @JoinColumn({
+    name: 'id_rol_usuario',
+    foreignKeyConstraintName: 'fk_usuario_rol_usuario',
+  })
+  rol?: RolUsuario;
 
   @Column({ name: 'debe_cambiar_clave', type: 'boolean', default: false })
   debeCambiarClave!: boolean;

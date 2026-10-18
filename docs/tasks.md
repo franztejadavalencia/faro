@@ -83,13 +83,14 @@ Backend (B) y frontend (F). Pueden avanzar en paralelo cuando haya contrato.
         reúso de un paso rechazado; un token temporal no sirve en otras rutas; un código de
         respaldo sirve una sola vez · cerrada 2026-10-18 (decisiones 94 a 98; `@otplib/*` 13.5.0
         por separado, `@scure/base` 1.2.6, `qrcode` 1.5.4)
-- [ ] B6 · Permisos: `modulo_sistema`/`opcion_modulo_sistema` por migración (opciones de la
+- [x] B6 · Permisos: `modulo_sistema`/`opcion_modulo_sistema` por migración (opciones de la
         decisión 49; módulos de spec §4), `rol_usuario` por negocio con Dueño fijo (hereda de
         `BaseNegocioOpcionalEntity`) y el rol de plataforma, `usuario.id_rol_usuario` (asigna el
         rol al admin y recién entonces `NOT NULL` + FK, decisión 85), `permiso_rol_usuario`, menú
         por rol, `@RequierePermiso` + `PermisoGuard`, utilidad para
         omitir costos sin `ver_costos` · e2e: menú por rol; 403 sin permiso; no se puede editar
-        el rol Dueño; una respuesta de prueba omite el costo sin `ver_costos`
+        el rol Dueño; una respuesta de prueba omite el costo sin `ver_costos` · cerrada
+        2026-10-18 (decisiones 99 a 101; incluye las rutas `/api/roles` y `GET /auth/sesion`)
 - [ ] B7 · Usuarios del negocio: CRUD de empleados sobre `persona` (buscar o crear), clave
         temporal, restablecer clave y desbloquear (dueño → empleados; admin → dueño), bitácora;
         **consulta de la bitácora del negocio** para el dueño (filtro por usuario, evento y
@@ -99,7 +100,10 @@ Backend (B) y frontend (F). Pueden avanzar en paralelo cuando haya contrato.
         deja `debe_cambiar_clave`; la consulta de bitácora filtra y solo muestra eventos del
         negocio; **aislamiento A/B** (B no ve ni referencia usuarios, personas ni bitácora de A);
         el dueño activa la 2FA y el próximo login pide `VERIFICAR_2FA`; desactivar sin el código
-        correcto se rechaza; el admin no puede desactivar la suya
+        correcto se rechaza; el admin no puede desactivar la suya. **Anti-escalada** (decisión
+        99): asignar un rol a un usuario exige que el rol del editor tenga todos los permisos del
+        rol asignado, y nadie cambia su propio rol; e2e: un empleado con `usuarios.editar` no se
+        asigna ni asigna a otro un rol con más permisos que el suyo
 - [ ] F1 · Crear `faro-frontend`: Angular CLI, Material con tema M3 de FARO, tokens `--faro-*`,
         Tailwind 4 sin preflight, Manrope, `DateFnsAdapter` `es`, ESLint, Prettier,
         `.npmrc save-exact` · `npm start` levanta una página con el tema; build y lint sin

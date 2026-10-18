@@ -22,9 +22,14 @@ import {
   MENSAJE_CREDENCIALES_INVALIDAS,
   MENSAJE_SESION_INVALIDA,
 } from '../constants/auth.constants';
+import { PermisoService } from '../../permiso/services/permiso.service';
 import { CambiarClaveDto } from '../dto/cambiar-clave.dto';
 import { LoginDto } from '../dto/login.dto';
-import { RespuestaLogin, RespuestaSesionDto } from '../dto/respuesta-login.dto';
+import {
+  RespuestaLogin,
+  RespuestaSesionDto,
+  SesionActualDto,
+} from '../dto/respuesta-login.dto';
 import { estaBloqueado, IntentosService } from './intentos.service';
 import { TokenService } from './token.service';
 
@@ -53,6 +58,7 @@ export class AuthService {
     private readonly bitacora: BitacoraService,
     private readonly contexto: RequestContextService,
     private readonly intentos: IntentosService,
+    private readonly permisos: PermisoService,
   ) {}
 
   async login(dto: LoginDto): Promise<RespuestaLogin> {
@@ -189,6 +195,7 @@ export class AuthService {
         .createQueryBuilder('u')
         .addSelect('u.clave')
         .innerJoinAndSelect('u.persona', 'p')
+        .innerJoinAndSelect('u.rol', 'rol')
         .leftJoinAndSelect('u.negocio', 'n'),
     ).getOne();
   }
@@ -208,7 +215,7 @@ export class AuthService {
   }
 
   /** Sesión abierta (§11): la usa también la 2FA al pasar el segundo factor. */
-  respuestaSesion(usuario: Usuario): RespuestaSesionDto {
+  async respuestaSesion(usuario: Usuario): Promise<RespuestaSesionDto> {
     return {
       estado: 'OK',
       token: this.tokens.firmar({
@@ -216,6 +223,32 @@ export class AuthService {
         idNegocio: usuario.idNegocio,
         versionSesion: usuario.versionSesion,
       }),
+      ...(await this.datosDeSesion(usuario)),
+    };
+  }
+
+  /**
+   * Usuario, menú y permisos **de ahora** del usuario de la sesión: el
+   * frontend los refresca sin volver a entrar (`GET /api/auth/sesion`).
+   */
+  async sesionActual(): Promise<SesionActualDto> {
+    const idUsuario = this.contexto.obtenerIdUsuario();
+    const usuario =
+      idUsuario === undefined
+        ? null
+        : await this.buscar((qb) =>
+            qb.where('u.idUsuario = :idUsuario', { idUsuario }),
+          );
+    if (!usuario) throw new UnauthorizedException(MENSAJE_SESION_INVALIDA);
+    return this.datosDeSesion(usuario);
+  }
+
+  private async datosDeSesion(usuario: Usuario): Promise<SesionActualDto> {
+    const [menu, permisos] = await Promise.all([
+      this.permisos.menuDelRol(usuario.idRolUsuario),
+      this.permisos.permisosDelRol(usuario.idRolUsuario),
+    ]);
+    return {
       usuario: {
         id: usuario.idUsuario,
         nombre: usuario.persona ? nombreCompleto(usuario.persona) : '',
@@ -223,11 +256,10 @@ export class AuthService {
         negocio: usuario.negocio
           ? { id: usuario.negocio.idNegocio, nombre: usuario.negocio.nombre }
           : null,
-        // Roles, menú y permisos llegan con B6.
-        rol: null,
+        rol: usuario.rol?.nombre ?? null,
       },
-      menu: [],
-      permisos: [],
+      menu,
+      permisos,
     };
   }
 }

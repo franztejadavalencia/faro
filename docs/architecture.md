@@ -392,8 +392,9 @@ erDiagram
     negocio ||--o{ rol_usuario : ""
     rol_usuario ||--o{ usuario : ""
     rol_usuario ||--o{ permiso_rol_usuario : ""
-    modulo_sistema ||--o{ permiso_rol_usuario : ""
-    opcion_modulo_sistema ||--o{ permiso_rol_usuario : ""
+    modulo_sistema ||--o{ modulo_opcion_sistema : "opciones válidas"
+    opcion_modulo_sistema ||--o{ modulo_opcion_sistema : ""
+    modulo_opcion_sistema ||--o{ permiso_rol_usuario : "FK compuesta"
     usuario ||--o{ usuario_codigo_respaldo : "2FA"
     negocio ||--o{ bitacora : ""
     negocio ||--o{ cuenta : "plan de cuentas"
@@ -484,9 +485,9 @@ erDiagram
   - El nombre para mostrar sale de un helper `nombreCompleto(persona)`, no de un `CONCAT`
     repetido en cada consulta.
 - `usuario` (`BaseNegocioOpcionalEntity`; `id_negocio = null` en plataforma): `usuario` (login),
-  `clave` (bcrypt, `select: false`), `id_persona` (obligatorio), `id_rol_usuario` (**llega con
-  B6**, que crea el rol de plataforma, se lo asigna al admin y recién entonces pone `NOT NULL` y
-  la FK; decisión 85), `debe_cambiar_clave`, `totp_secreto` (`text`, `select: false`: guarda el
+  `clave` (bcrypt, `select: false`), `id_persona` (obligatorio), `id_rol_usuario` (`NOT NULL`, FK
+  `fk_usuario_rol_usuario`; B6 sembró el rol de plataforma, se lo asignó al admin y recién entonces
+  puso `NOT NULL`, decisión 85), `debe_cambiar_clave`, `totp_secreto` (`text`, `select: false`: guarda el
   texto **cifrado**, nunca el secreto: AES-256-GCM con `TOTP_CLAVE_CIFRADO`, AAD `usuario:<id>`,
   formato `v1:<iv>:<etiqueta>:<cifrado>`; decisión 98), `totp_activo` (CHECK `ck_usuario_totp`:
   activo exige secreto, B5), `totp_ultimo_paso` (antirreúso), `intentos_fallidos` y `bloqueado_hasta` (bloqueo temporal, decisión 53) y `version_sesion` (B4, va en el JWT; decisión 87).
@@ -494,14 +495,38 @@ erDiagram
     login no pide el negocio. Índice único sobre `lower(usuario)` con `id_estado = 1`.
   - `usuario_codigo_respaldo (id_usuario, hash, usado_en, fecha_registro)`: códigos de respaldo de la 2FA, de
     un solo uso (P, decisión 50): 10 por activación, `hash` con bcrypt costo 12 (decisión 96).
-- `rol_usuario`: `id_negocio` (null en plataforma), `nombre`, `descripcion` y `es_fijo`. Único
-  `(id_negocio, nombre)`. El rol **Dueño** (`es_fijo = true`) viene de la seed con todos los
-  permisos y el servicio rechaza editarlo o quitarlo (decisión 44).
-- `modulo_sistema` y `opcion_modulo_sistema`: catálogo global, sin `id_negocio`. Sus filas solo
-  cambian por migración (decisión 45). Opciones: `ver`, `crear`, `editar`, `eliminar`,
-  `anular`, `cerrar`, `reabrir`, `ver_costos` (decisión 49).
-- `permiso_rol_usuario (id_rol_usuario, id_modulo_sistema, id_opcion_modulo_sistema, activo)`,
-  como SIAP.
+- `rol_usuario` (`BaseNegocioOpcionalEntity`): `id_negocio` (null en plataforma), `nombre`,
+  `descripcion` y `es_fijo`. Único `(id_negocio, lower(nombre))` con `id_estado = 1` y
+  `NULLS NOT DISTINCT` (PG 15+; el rol de plataforma, con `id_negocio` nulo, tampoco se repite;
+  índice de expresión en la migración, `synchronize: false`). Los roles **Dueño** (fijo) y
+  **Empleado** de un negocio los crea `crearRolesIniciales(manager, idNegocio)`
+  (`seguridad/permiso/utils/roles-iniciales.ts`), que llamará el registro (D2); el rol de
+  plataforma («Administrador de plataforma», fijo) lo siembra la migración y lo repone
+  `asegurarRolPlataforma` (`seed:admin`, `limpiarBase()`). El servicio rechaza editar o borrar
+  un rol fijo (409; decisión 44).
+- Catálogo global, sin `id_negocio`, **solo por migración** (decisión 45); referencia en
+  `seguridad/permiso/constants/catalogo.ts` (decisión 99):
+  - `modulo_sistema`: `codigo` (único, estable; lo que escribe `@RequierePermiso`), `nombre`,
+    `descripcion`, `route` (frontend; nula en un grupo), `icono` (Material Symbols), `orden`,
+    `tipo_modulo` (`GRUPO` | `MENU`: un grupo es un nodo del menú sin permisos propios),
+    `ambito` (`NEGOCIO` | `PLATAFORMA`) e `id_grupo_modulo_sistema` (un nivel). 22 módulos de
+    negocio (`pos`, `ventas`, `compras`, `inventario`, `ajustes_inventario`, `lineas`, `productos`,
+    `proveedores`, `gastos`, `plan_cuentas`, `libro_diario`, `libro_mayor`, `cuadre`,
+    `cierre_mensual`, `estado_resultados`, `ranking`, `dashboard`, `negocio`, `categorias_gasto`,
+    `usuarios`, `roles`, `bitacora`) y 2 de plataforma (`negocios`, `bitacora_plataforma`).
+  - `opcion_modulo_sistema`: `codigo` y `nombre`. Opciones: `ver`, `crear`, `editar`, `eliminar`,
+    `anular`, `cerrar`, `reabrir`, `ver_costos` (decisión 49).
+  - `modulo_opcion_sistema (id_modulo_sistema, id_opcion_modulo_sistema)`: los **pares válidos**.
+    Un módulo solo tiene las opciones que le corresponden (p. ej. `lineas`: ver, crear, editar,
+    eliminar; `cuadre`: ver).
+- `permiso_rol_usuario (id_rol_usuario, id_modulo_sistema, id_opcion_modulo_sistema, activo)`:
+  único por terna y **FK compuesta al par válido** (`fk_permiso_rol_usuario_par`): la base no
+  admite un permiso de una opción que el módulo no tiene. Cuelga del rol y no lleva
+  `id_negocio`: a un rol solo se llega con `NegocioRepository`, así que los permisos de un rol
+  de otro negocio no se alcanzan. El Dueño y el rol de plataforma tienen **todos** los pares de
+  su ámbito como filas explícitas; la migración de un módulo nuevo las reparte con
+  `otorgarARolesFijos(ejecutor, codigoModulo)` (`database/utils/`) y un e2e exige que todo rol
+  fijo los tenga (decisión 99).
 - `bitacora` (decisión 51): `id_negocio` (nullable para eventos de plataforma), `id_usuario`
   (nullable: login fallido), `evento`, `detalle` (`jsonb`), `ip`, `user_agent`, `url`,
   `metodo` y `fecha`. **Solo inserción**: mismo trigger `BEFORE UPDATE OR DELETE` que los
@@ -710,8 +735,10 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
   ```
   Credenciales malas, usuario desactivado, cuenta bloqueada o negocio suspendido → **401** con el
   mismo cuerpo, "Credenciales inválidas" (SIAP responde 400). Para el admin de plataforma,
-  `negocio` es `null`. Se diseña desde cero, sin los campos heredados de SIAP. **Hasta B6**
-  `rol` es `null` y `menu` y `permisos` vienen vacíos (decisión 91). El login no distingue
+  `negocio` es `null`. Se diseña desde cero, sin los campos heredados de SIAP. `rol` es el
+  nombre del rol ("Dueño", "Empleado", uno propio o "Administrador de plataforma"), `menu` el árbol
+  del rol y `permisos` la lista `{ modulo, opcion }` de sus permisos activos (B6; decisiones 91
+  y 99). El login no distingue
   mayúsculas en el usuario (índice `lower(usuario)`) y siempre corre `bcrypt.compare` (contra un
   hash ficticio si el usuario no existe), para que el tiempo no revele qué cuentas existen.
   - `usuario.nombre` sale de `nombreCompleto(persona)` (decisión 43).
@@ -779,7 +806,15 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
     `debe_cambiar_clave` es `true`, responde **403** a toda ruta salvo las marcadas con
     `@PermitidoConClaveTemporal()` (solo el cambio de clave; no hay ruta de cierre de sesión: el
     frontend borra el token).
-  - `PermisoGuard` (B6).
+  - `PermisoGuard` (`seguridad/permiso/guards/`, `APP_GUARD` **después** de `JwtAuthGuard`, en
+    `AuthModule`): **denegar por defecto** (decisión 99). `@Publico()` pasa;
+    `@RequierePermiso(modulo, opcion)` consulta en cada request si el rol tiene el permiso
+    activo (si no, **403** «No tiene permiso para esta operación.»); `@SoloAutenticado()`
+    (acciones de la propia cuenta: cambiar la clave, la 2FA, `GET /auth/sesion`) pasa con
+    cualquier sesión válida; una ruta **sin ninguna** de las tres marcas responde 403 y deja un
+    `error` en el log. `src/rutas-con-permiso.spec.ts` recorre todos los `*.controller.ts` y
+    falla en `npm test` si alguna ruta no declara su acceso. El rol sale de la fila de
+    `usuario` que el guard JWT ya lee (`request.rolActual`), no del token.
 - **Contraseñas** (decisión 48): el dueño escribe una clave temporal (mínimo 8 caracteres) al
   crear un empleado. El dueño restablece la de sus empleados y el admin de plataforma la del
   dueño; ambas acciones dejan `debe_cambiar_clave = true`. Sin recuperación por correo en la
@@ -789,8 +824,25 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
   módulos, opciones y roles portado de SIAP. El guard del frontend solo oculta menú y rutas.
   - **`ver_costos`** (decisión 49): sin ese permiso, el backend **omite** de las respuestas
     costo, margen y valor de inventario. No basta con ocultarlos en el frontend.
+  - **Omisión de costos** (decisión 100): `@OmitirSinVerCostos(modulo, [campos])` quita esas
+    claves de la respuesta, a cualquier profundidad, si el rol no tiene `ver_costos` en ese
+    módulo; sin rol conocido las quita.
   - Roles por negocio y Dueño fijo (decisión 44). Pantalla de permisos en matriz módulos ×
     opciones (decisión 45).
+  - **Rutas de roles** (B6; módulo `roles`): `GET /api/roles`; `POST /api/roles` (nace sin
+    permisos); `PATCH /api/roles/:id` (nombre y descripción); `DELETE /api/roles/:id` (baja
+    lógica; 409 con usuarios activos); `GET /api/roles/:id/permisos` (la matriz: módulos del
+    ámbito NEGOCIO con sus opciones válidas y `activo`); `PUT /api/roles/:id/permisos`
+    `{ permisos: [{ modulo, opcion }] }`, el conjunto **completo** de pares activos. Un rol de
+    otro negocio o el de plataforma responde 404; el rol fijo (Dueño), 409; un par inexistente,
+    400. **Anti-escalada**: el editor solo cambia pares que su propio rol tiene activos (403 con
+    la lista) y no edita su propio rol (409). El `PUT` es una transacción, serializa las
+    ediciones del mismo rol y registra en `bitacora` `CAMBIO_PERMISOS` con solo el diff
+    (`activados`, `desactivados`); también `ROL_CREADO`, `ROL_ACTUALIZADO` y `ROL_ELIMINADO`.
+  - `GET /api/auth/sesion` (`@SoloAutenticado`): `{ usuario, menu, permisos }` de ahora, sin
+    token nuevo, para refrescar el menú sin volver a entrar. El **menú** (`ItemMenu`:
+    `codigo`, `nombre`, `route`, `icono`, `hijos?`) tiene los módulos con `ver`, agrupados, y un
+    grupo sin módulos visibles no aparece.
 - **Sesión en el frontend** (decisión 47): token en `localStorage`; "Cerrar sesión" siempre
   visible en el header; cerrar sesión en una pestaña la cierra en todas (evento `storage`); un
   401 limpia el almacenamiento.

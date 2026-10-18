@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { VariablesEntorno } from '../../config/env.validation';
+import { PermisoGuard } from '../permiso/guards/permiso.guard';
+import { PermisoModule } from '../permiso/permiso.module';
 import { SeguridadModule } from '../seguridad.module';
 import { ALGORITMO_TOKEN, VIGENCIA_TOKEN } from './constants/auth.constants';
 import { AuthController } from './controllers/auth.controller';
@@ -17,6 +19,7 @@ import { TokenService } from './services/token.service';
 @Module({
   imports: [
     SeguridadModule,
+    PermisoModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<VariablesEntorno, true>) => ({
@@ -33,8 +36,9 @@ import { TokenService } from './services/token.service';
     IntentosService,
     CifradoTotpService,
     DosFactoresService,
-    // Guard global; B6 registra `PermisoGuard` después de este.
+    // Guards globales, en este orden: primero la sesión, luego el permiso.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: PermisoGuard },
   ],
   exports: [TokenService],
 })

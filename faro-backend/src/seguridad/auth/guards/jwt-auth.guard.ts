@@ -18,7 +18,7 @@ import {
 import { PERMITIDO_CON_CLAVE_TEMPORAL } from '../decorators/permitido-con-clave-temporal.decorator';
 import { SOLO_TOKEN_TEMPORAL_2FA } from '../decorators/solo-token-temporal-2fa.decorator';
 import { TokenService } from '../services/token.service';
-import { RequestCon2fa } from '../types/request-2fa';
+import { RequestSesion } from '../types/request-sesion';
 
 /**
  * Guard global (`APP_GUARD`). Además de firma y vigencia, revisa en **cada
@@ -44,7 +44,7 @@ export class JwtAuthGuard implements CanActivate {
     // login ni /api/salud.
     if (this.tiene(context, ES_PUBLICO)) return true;
 
-    const request = context.switchToHttp().getRequest<RequestCon2fa>();
+    const request = context.switchToHttp().getRequest<RequestSesion>();
     const token = this.extraerToken(request);
     if (!token) throw new UnauthorizedException('Token no proporcionado');
 
@@ -75,6 +75,8 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     request.usuarioActual = payload;
+    // El rol sale de la fila (no del token): cambiarlo rige en el acto.
+    request.rolActual = { idRolUsuario: usuario.idRolUsuario };
     return true;
   }
 
@@ -93,6 +95,7 @@ export class JwtAuthGuard implements CanActivate {
         idUsuario: true,
         idNegocio: true,
         idEstado: true,
+        idRolUsuario: true,
         debeCambiarClave: true,
         versionSesion: true,
         negocio: { idNegocio: true, estado: true, idEstado: true },

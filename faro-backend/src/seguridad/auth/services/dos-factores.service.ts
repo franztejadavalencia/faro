@@ -158,7 +158,7 @@ export class DosFactoresService {
       actor,
       detalle,
     );
-    return this.auth.respuestaSesion(usuario);
+    return await this.auth.respuestaSesion(usuario);
   }
 
   /**
@@ -213,7 +213,10 @@ export class DosFactoresService {
       EVENTOS_BITACORA.ACTIVACION_2FA,
       this.actor(usuario),
     );
-    return { ...this.auth.respuestaSesion(usuario), codigosRespaldo: codigos };
+    return {
+      ...(await this.auth.respuestaSesion(usuario)),
+      codigosRespaldo: codigos,
+    };
   }
 
   /**
@@ -277,6 +280,7 @@ export class DosFactoresService {
       .createQueryBuilder('u')
       .addSelect('u.totpSecreto')
       .innerJoinAndSelect('u.persona', 'p')
+      .innerJoinAndSelect('u.rol', 'rol')
       .leftJoinAndSelect('u.negocio', 'n')
       .where('u.idUsuario = :idUsuario', { idUsuario })
       .getOne();

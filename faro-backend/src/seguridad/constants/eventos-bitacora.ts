@@ -22,6 +22,11 @@ export const EVENTOS_BITACORA = {
   ACTIVACION_2FA: 'ACTIVACION_2FA',
   /** `detalle.motivo` con un `MOTIVO_2FA_FALLIDO`. Nunca el código. */
   VERIFICACION_2FA_FALLIDA: 'VERIFICACION_2FA_FALLIDA',
+  /** Un rol cambió sus permisos: `detalle` = rol, `activados` y `desactivados`. */
+  CAMBIO_PERMISOS: 'CAMBIO_PERMISOS',
+  ROL_CREADO: 'ROL_CREADO',
+  ROL_ACTUALIZADO: 'ROL_ACTUALIZADO',
+  ROL_ELIMINADO: 'ROL_ELIMINADO',
 } as const;
 
 export type EventoBitacora =

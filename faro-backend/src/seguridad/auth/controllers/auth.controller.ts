@@ -1,4 +1,11 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -11,6 +18,7 @@ import {
   getSchemaPath,
 } from '@nestjs/swagger';
 import { Publico } from '@common/decorators/publico.decorator';
+import { SoloAutenticado } from '../../permiso/decorators/solo-autenticado.decorator';
 import { PermitidoConClaveTemporal } from '../decorators/permitido-con-clave-temporal.decorator';
 import { CambiarClaveDto } from '../dto/cambiar-clave.dto';
 import { LoginDto } from '../dto/login.dto';
@@ -18,6 +26,7 @@ import {
   RespuestaDosFactoresDto,
   RespuestaLogin,
   RespuestaSesionDto,
+  SesionActualDto,
 } from '../dto/respuesta-login.dto';
 import { AuthService } from '../services/auth.service';
 
@@ -63,6 +72,7 @@ export class AuthController {
 
   @Post('cambiar-clave')
   @PermitidoConClaveTemporal()
+  @SoloAutenticado()
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({
@@ -82,5 +92,18 @@ export class AuthController {
   })
   cambiarClave(@Body() dto: CambiarClaveDto): Promise<RespuestaSesionDto> {
     return this.authService.cambiarClave(dto);
+  }
+
+  @Get('sesion')
+  @SoloAutenticado()
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Usuario, menú y permisos de ahora del usuario de la sesión (sin token nuevo)',
+  })
+  @ApiOkResponse({ type: SesionActualDto })
+  @ApiUnauthorizedResponse({ description: 'Sin sesión válida' })
+  sesion(): Promise<SesionActualDto> {
+    return this.authService.sesionActual();
   }
 }

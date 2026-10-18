@@ -22,33 +22,54 @@ export class UsuarioSesionDto {
   @ApiProperty({ type: NegocioSesionDto, nullable: true })
   negocio!: NegocioSesionDto | null;
 
-  /** Nombre del rol. `null` hasta B6, que crea los roles. */
-  @ApiProperty({ type: String, nullable: true, example: null })
+  /** Nombre del rol: `Dueño`, `Empleado`, uno propio o `Administrador de plataforma`. */
+  @ApiProperty({ type: String, nullable: true, example: 'Dueño' })
   rol!: string | null;
 }
 
 export class PermisoSesionDto {
+  /** Código del módulo, p. ej. `productos`. */
   modulo!: string;
+  /** Código de la opción, p. ej. `ver_costos`. */
   opcion!: string;
 }
 
+/** Nodo del menú del rol: un grupo (con `hijos`, sin `route`) o un módulo. */
+export class ItemMenuDto {
+  codigo!: string;
+  nombre!: string;
+  /** Ruta del frontend; `null` en un grupo. */
+  @ApiProperty({ type: String, nullable: true, example: '/productos' })
+  route!: string | null;
+  /** Nombre de Material Symbols. */
+  icono!: string;
+  @ApiProperty({ type: () => [ItemMenuDto], required: false })
+  hijos?: ItemMenuDto[];
+}
+
+/**
+ * Lo que cambia con el rol: usuario, menú y permisos de ahora. Es el cuerpo de
+ * `GET /api/auth/sesion` y parte de la sesión del login.
+ */
+export class SesionActualDto {
+  usuario!: UsuarioSesionDto;
+
+  /** Árbol del menú del rol (módulos con `ver`, agrupados), ya ordenado. */
+  @ApiProperty({ type: [ItemMenuDto] })
+  menu!: ItemMenuDto[];
+
+  /** Permisos activos del rol. */
+  @ApiProperty({ type: [PermisoSesionDto] })
+  permisos!: PermisoSesionDto[];
+}
+
 /** Sesión abierta: contrato de `architecture.md` §11. */
-export class RespuestaSesionDto {
+export class RespuestaSesionDto extends SesionActualDto {
   @ApiProperty({ enum: ['OK'], example: 'OK' })
   estado!: 'OK';
 
   /** JWT de sesión (12 h). Va en `Authorization: Bearer …`. */
   token!: string;
-
-  usuario!: UsuarioSesionDto;
-
-  /** Árbol del menú del rol. Vacío hasta B6. */
-  @ApiProperty({ type: 'array', items: { type: 'object' }, example: [] })
-  menu!: Record<string, unknown>[];
-
-  /** Vacío hasta B6. */
-  @ApiProperty({ type: [PermisoSesionDto], example: [] })
-  permisos!: PermisoSesionDto[];
 }
 
 /**

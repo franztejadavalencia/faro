@@ -10,6 +10,7 @@ import {
   ApiUnauthorizedResponse,
   getSchemaPath,
 } from '@nestjs/swagger';
+import { SoloAutenticado } from '../../permiso/decorators/solo-autenticado.decorator';
 import { SoloTokenTemporal2fa } from '../decorators/solo-token-temporal-2fa.decorator';
 import { Usuario2fa } from '../decorators/usuario-2fa.decorator';
 import {
@@ -26,6 +27,7 @@ import { DosFactoresService } from '../services/dos-factores.service';
  * nunca del body.
  */
 @ApiTags('auth')
+@SoloAutenticado()
 @ApiBearerAuth()
 @ApiExtraModels(RespuestaSesionDto, RespuestaActivacion2faDto)
 @Controller('auth/2fa')

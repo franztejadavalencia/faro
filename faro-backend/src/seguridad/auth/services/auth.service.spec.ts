@@ -6,6 +6,7 @@ import {
 import { Repository } from 'typeorm';
 import { RequestContextService } from '@common/services/request-context.service';
 import { Usuario } from '../../entities/usuario.entity';
+import { PermisoService } from '../../permiso/services/permiso.service';
 import { BitacoraService } from '../../services/bitacora.service';
 import { claveCoincide, hashearClave } from '../../utils/clave';
 import { MENSAJE_CREDENCIALES_INVALIDAS } from '../constants/auth.constants';
@@ -21,10 +22,22 @@ jest.mock('../../utils/clave', () => ({
 
 const coincide = claveCoincide as jest.MockedFunction<typeof claveCoincide>;
 
+const MENU = [
+  {
+    codigo: 'pos',
+    nombre: 'Punto de venta',
+    route: '/pos',
+    icono: 'point_of_sale',
+  },
+];
+const PERMISOS = [{ modulo: 'pos', opcion: 'ver' }];
+
 function usuario(cambios: Partial<Usuario> = {}): Usuario {
   return {
     idUsuario: 3,
     idNegocio: 7,
+    idRolUsuario: 5,
+    rol: { idRolUsuario: 5, nombre: 'Dueño' },
     usuario: 'ana',
     clave: 'hash-real',
     idEstado: 1,
@@ -74,6 +87,10 @@ function armar(fila: Usuario | null, intentosTrasFallo?: number) {
     registrar: jest.fn().mockResolvedValue(undefined),
     registrarAcceso: jest.fn().mockResolvedValue(undefined),
   };
+  const permisos = {
+    menuDelRol: jest.fn().mockResolvedValue(MENU),
+    permisosDelRol: jest.fn().mockResolvedValue(PERMISOS),
+  };
   const contexto = new RequestContextService();
   const servicio = new AuthService(
     usuarios,
@@ -81,6 +98,7 @@ function armar(fila: Usuario | null, intentosTrasFallo?: number) {
     bitacora as unknown as BitacoraService,
     contexto,
     new IntentosService(usuarios, bitacora as unknown as BitacoraService),
+    permisos as unknown as PermisoService,
   );
   const eventos = () =>
     bitacora.registrarAcceso.mock.calls.map(
@@ -97,6 +115,7 @@ function armar(fila: Usuario | null, intentosTrasFallo?: number) {
     bitacora,
     contexto,
     eventos,
+    permisos,
   };
 }
 
@@ -116,10 +135,10 @@ describe('AuthService.login', () => {
         nombre: 'Ana Pérez',
         debeCambiarClave: false,
         negocio: { id: 7, nombre: 'Tienda' },
-        rol: null,
+        rol: 'Dueño',
       },
-      menu: [],
-      permisos: [],
+      menu: MENU,
+      permisos: PERMISOS,
     });
     expect(firmar).toHaveBeenCalledWith({
       idUsuario: 3,

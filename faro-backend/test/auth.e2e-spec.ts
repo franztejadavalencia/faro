@@ -84,10 +84,11 @@ describe('Auth: login, guard JWT, cambio de clave y bloqueo (e2e)', () => {
           nombre: 'Ana Prueba',
           debeCambiarClave: false,
           negocio: { id: negocio.idNegocio, nombre: 'Tienda Central' },
-          rol: null,
+          rol: 'Dueño',
         },
-        menu: [],
-        permisos: [],
+        // El detalle del menú y de los permisos: permisos.e2e-spec.ts.
+        menu: expect.any(Array),
+        permisos: expect.any(Array),
       });
       const contexto = await yo(body.token).expect(200);
       expect(contexto.body).toMatchObject({
@@ -152,7 +153,8 @@ describe('Auth: login, guard JWT, cambio de clave y bloqueo (e2e)', () => {
       const minutos =
         (bloqueado.bloqueadoHasta!.getTime() - Date.now()) / 60_000;
       expect(minutos).toBeGreaterThan(14);
-      expect(minutos).toBeLessThanOrEqual(15);
+      // Holgura de 1 s: el reloj de Node en Windows y el de Postgres difieren unos ms.
+      expect(minutos).toBeLessThanOrEqual(15 + 1 / 60);
 
       const conClaveCorrecta = await login(u.usuario, u.clave).expect(401);
       expect(conClaveCorrecta.body).toEqual(CREDENCIALES_INVALIDAS);

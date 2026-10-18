@@ -11,8 +11,10 @@ import { Negocio } from '../src/plataforma/entities/negocio.entity';
 import { Bitacora } from '../src/seguridad/entities/bitacora.entity';
 import { Persona } from '../src/seguridad/entities/persona.entity';
 import { Usuario } from '../src/seguridad/entities/usuario.entity';
+import { asegurarRolPlataforma } from '../src/seguridad/permiso/utils/roles-iniciales';
 import { crearApp } from './utils/crear-app';
 import { limpiarBase } from './utils/limpiar-base';
+import { rolDeNegocio } from './utils/usuarios-de-prueba';
 
 /** Modelo de seguridad de B3: bitácora inmutable, login único, CHECK y seed. */
 describe('Modelo de seguridad (e2e)', () => {
@@ -49,20 +51,27 @@ describe('Modelo de seguridad (e2e)', () => {
       }),
     );
 
-  const crearUsuario = (
+  const crearUsuario = async (
     usuario: string,
     idPersona: number,
     datos: Partial<Usuario> = {},
-  ) =>
-    dataSource.getRepository(Usuario).save(
+  ) => {
+    const idNegocio = datos.idNegocio ?? null;
+    const idRolUsuario =
+      idNegocio === null
+        ? await asegurarRolPlataforma(dataSource.manager)
+        : await rolDeNegocio(dataSource, idNegocio, 'DUENO');
+    return dataSource.getRepository(Usuario).save(
       dataSource.getRepository(Usuario).create({
         idNegocio: null,
         usuario,
         clave: 'hash-de-prueba',
         idPersona,
+        idRolUsuario,
         ...datos,
       }),
     );
+  };
 
   const codigo = async (promesa: Promise<unknown>) => {
     try {
@@ -287,6 +296,10 @@ describe('Modelo de seguridad (e2e)', () => {
         .where('u.usuario = :usuario', { usuario: 'admin' })
         .getOneOrFail();
       expect(admin.idNegocio).toBeNull();
+      // Nace con el rol de plataforma (decisión 85).
+      expect(admin.idRolUsuario).toBe(
+        await asegurarRolPlataforma(dataSource.manager),
+      );
       expect(admin.debeCambiarClave).toBe(false);
       expect(admin.totpActivo).toBe(false);
       expect(admin.clave).not.toBe(d.clave);

@@ -84,20 +84,20 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
 | Archivo de SIAP | Cat. | Cambio en FARO | Tarea |
 |---|---|---|---|
 | `seguridad/auth/services/token.service.ts` | ~ | Payload `{ idUsuario, idNegocio }`; token temporal de 2FA (P, decisión 50). Hecho en B4 con `versionSesion`, `algorithms: [HS256]` al verificar y rechazo de un token con `proposito`. Token temporal hecho en B5 (`firmarTemporal` / `verificarTemporal`, 5 min, `proposito: '2fa'`, con `versionSesion`) | B4 (token temporal: B5) |
-| `seguridad/auth/services/auth.service.ts` | R | Sin rol operativo; 401 (SIAP: `findOneOrFail` + `catch` → 400); respuesta de `architecture.md` §11; `findMenu` y `findPermiso` filtran `id_estado`; nombre con `nombreCompleto(persona)`; registra en `bitacora` (decisión 51). Hecho en B4: `lower(usuario)`, hash ficticio si no existe, bloqueo temporal atómico, `registrarAcceso` (decisión 88); `findMenu`/`findPermiso` pasan a B6 (decisión 91) | B4 (menú y permisos: B6) |
+| `seguridad/auth/services/auth.service.ts` | R | Sin rol operativo; 401 (SIAP: `findOneOrFail` + `catch` → 400); respuesta de `architecture.md` §11; `findMenu` y `findPermiso` filtran `id_estado`; nombre con `nombreCompleto(persona)`; registra en `bitacora` (decisión 51). Hecho en B4: `lower(usuario)`, hash ficticio si no existe, bloqueo temporal atómico, `registrarAcceso` (decisión 88); `findMenu`/`findPermiso` pasan a B6 (decisión 91), hecho en B6 con `PermisoService` | B4 (menú y permisos: B6) |
 | `seguridad/auth/controllers/auth.controller.ts`, `dto/login.dto.ts` | ~ | `POST /auth/login` (SIAP: `POST /auth`). Hecho en B4, con `POST /auth/cambiar-clave` | B4 |
 | `seguridad/auth/types/response-login.interface.ts` | ✗ | Contrato nuevo (§11) | B4 |
 | `seguridad/auth/auth.module.ts` | ~ | `JWT_SECRET` desde `ConfigService` (`registerAsync`). Hecho en B4 con `@nestjs/jwt` 11.0.2 (decisión 86); registra `JwtAuthGuard` como `APP_GUARD` | B4 |
-| `abc/usuario/entities/usuario.entity.ts` | ~ | `id_persona` a la `persona` de FARO; `id_negocio`; `debe_cambiar_clave`; `totp_secreto` (cifrado), `totp_activo`; índice único global `lower(usuario)` con `id_estado = 1` (decisiones 43, 48 y 50). Hecho en B3 (`BaseNegocioOpcionalEntity`, `totp_secreto` cifrado y `select: false`; sin `id_rol_usuario`, que llega con B6, decisión 85) | B3 |
+| `abc/usuario/entities/usuario.entity.ts` | ~ | `id_persona` a la `persona` de FARO; `id_negocio`; `debe_cambiar_clave`; `totp_secreto` (cifrado), `totp_activo`; índice único global `lower(usuario)` con `id_estado = 1` (decisiones 43, 48 y 50). Hecho en B3 (`BaseNegocioOpcionalEntity`, `totp_secreto` cifrado y `select: false`; `id_rol_usuario` llegó con B6, decisión 85) | B3 |
 | `abc/usuario/services/usuario.service.ts` | ~ | Sin `CLAVE_POR_DEFECTO = '1234'`: clave temporal del dueño (mín. 8) y restablecer clave (decisión 48); `findManyByStatus` usa el filtro (SIAP lo ignora); `changeClave` con `save()` (hecho en B4 como `AuthService.cambiarClave`, con el usuario del token, decisión 89); `findAllDetalle` sin `CONCAT` | B4 (`changeClave`) / B7 |
 | `abc/usuario/controllers/`, `dto/` (incl. `change-clave.dto.ts`), `types/`, `usuario.module.ts` | ~ | Sin `InstitucionModule`; `PartialType` desde `@nestjs/swagger` | B4 (`change-clave`: `seguridad/auth/dto/cambiar-clave.dto.ts`, hecho) / B7 |
-| `abc/permiso/entities/rol-usuario.entity.ts` | ~ | `id_negocio` (null en plataforma); único `(id_negocio, nombre)`; marca de rol fijo (Dueño) (decisión 44) | B6 |
-| `abc/permiso/entities/modulo-sistema.entity.ts`, `opcion-modulo-sistema.entity.ts`, `constants/tipo-modulo-codigo.ts` | = | Catálogo global; filas solo por migración (decisión 45) | B6 |
-| `abc/permiso/entities/permiso-rol-usuario.entity.ts` | = | — | B6 |
-| `abc/permiso/services/permiso-rol-usuario.service.ts`, su controller y DTO | ~ | Rechaza editar el rol Dueño; matriz módulos × opciones; registra en `bitacora` el cambio de permisos | B6 |
-| `abc/permiso/services/modulo-sistema.service.ts` (`findAllArbol`) | ~ | Solo lectura | B6 |
-| CRUD de módulos, opciones y roles (`*-modulo-sistema.*`, `rol-usuario.*`: controllers, services, DTO) | ✗ / ~ | Módulos y opciones: ✗ (cambian por migración). Roles: ~, el dueño crea roles propios de su negocio | B6 |
-| — | nuevo | `@RequierePermiso` y `PermisoGuard` (decisión 38); omitir costos sin `ver_costos` (decisión 49) | B6 |
+| `abc/permiso/entities/rol-usuario.entity.ts` | ~ | `id_negocio` (null en plataforma); único `(id_negocio, nombre)`; marca de rol fijo (Dueño) (decisión 44). Hecho en B6: `BaseNegocioOpcionalEntity`, único `(id_negocio, lower(nombre))` con `NULLS NOT DISTINCT` (decisión 99) | B6 |
+| `abc/permiso/entities/modulo-sistema.entity.ts`, `opcion-modulo-sistema.entity.ts`, `constants/tipo-modulo-codigo.ts` | = | Catálogo global; filas solo por migración (decisión 45). Hecho en B6, con `codigo` estable, `icono`, `ambito` (`NEGOCIO` \| `PLATAFORMA`), `tipo_modulo` `GRUPO` \| `MENU` en lugar de `route` único, y la tabla de pares válidos `modulo_opcion_sistema` (decisión 99) | B6 |
+| `abc/permiso/entities/permiso-rol-usuario.entity.ts` | = | Hecho en B6, con FK compuesta al par válido módulo × opción | B6 |
+| `abc/permiso/services/permiso-rol-usuario.service.ts`, su controller y DTO | ~ | Rechaza editar el rol Dueño; matriz módulos × opciones; registra en `bitacora` el cambio de permisos. Hecho en B6 como `RolUsuarioService`: un `PUT` transaccional en lugar del upsert por celda de SIAP, anti-escalada y `CAMBIO_PERMISOS` con el diff en `bitacora` | B6 |
+| `abc/permiso/services/modulo-sistema.service.ts` (`findAllArbol`) | ~ | Solo lectura. Hecho en B6: `PermisoService.matrizDelRol` (solo pares válidos) y `menuDelRol` (CTE de SIAP simplificada: hojas con `ver` y sus grupos) | B6 |
+| CRUD de módulos, opciones y roles (`*-modulo-sistema.*`, `rol-usuario.*`: controllers, services, DTO) | ✗ / ~ | Módulos y opciones: ✗ (cambian por migración). Roles: ~, el dueño crea roles propios de su negocio. Hecho en B6: `RolUsuarioController` (`/api/roles`) y, sin CRUD de módulos ni opciones, el catálogo por migración | B6 |
+| — | nuevo | `@RequierePermiso` y `PermisoGuard` (decisión 38); omitir costos sin `ver_costos` (decisión 49). Hecho en B6: `@RequierePermiso`, `@SoloAutenticado` (denegar por defecto), `PermisoGuard`, `@OmitirSinVerCostos` (decisiones 99 y 100) y `GET /auth/sesion` | B6 |
 
 ### Raíz del backend
 | Archivo de SIAP (`D:\SIAP\siap-backend\`) | Cat. | Cambio en FARO | Tarea |
@@ -176,7 +176,7 @@ Rutas relativas a `D:\SIAP\siap-backend\src` (backend) y `D:\SIAP\siap-frontend\
   seeds (admin de plataforma, módulos, opciones) se crean con **migraciones** en FARO. No se
   copian backups `.sql` de SIAP.
 - Opciones de permiso de la seed (decisión 49): `ver`, `crear`, `editar`, `eliminar`, `anular`,
-  `cerrar`, `reabrir`, `ver_costos`. La lista de módulos se define en B6 (que crea las tablas), siguiendo spec §4 (decisión 91).
+  `cerrar`, `reabrir`, `ver_costos`. Los 22 módulos de negocio y 2 de plataforma los definió B6 (decisiones 91 y 99), siguiendo spec §4.
 
 ## Referencias de CONTROLADOR
 
