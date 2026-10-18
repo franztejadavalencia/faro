@@ -8,6 +8,7 @@ import { SaludModule } from './salud/salud.module';
 import { PlataformaModule } from '@plataforma/plataforma.module';
 import { SeguridadModule } from '@seguridad/seguridad.module';
 import { AuthModule } from '@seguridad/auth/auth.module';
+import { UsuarioModule } from '@seguridad/usuario/usuario.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { AuthModule } from '@seguridad/auth/auth.module';
     PlataformaModule,
     SeguridadModule,
     AuthModule,
+    UsuarioModule,
   ],
 })
 export class AppModule {}

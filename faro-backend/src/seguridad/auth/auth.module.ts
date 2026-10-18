@@ -7,11 +7,14 @@ import { PermisoGuard } from '../permiso/guards/permiso.guard';
 import { PermisoModule } from '../permiso/permiso.module';
 import { SeguridadModule } from '../seguridad.module';
 import { ALGORITMO_TOKEN, VIGENCIA_TOKEN } from './constants/auth.constants';
+import { Cuenta2faController } from './controllers/cuenta-2fa.controller';
 import { AuthController } from './controllers/auth.controller';
 import { DosFactoresController } from './controllers/dos-factores.controller';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthService } from './services/auth.service';
 import { CifradoTotpService } from './services/cifrado-totp.service';
+import { Cuenta2faService } from './services/cuenta-2fa.service';
+import { SegundoFactorService } from './services/segundo-factor.service';
 import { DosFactoresService } from './services/dos-factores.service';
 import { IntentosService } from './services/intentos.service';
 import { TokenService } from './services/token.service';
@@ -29,13 +32,15 @@ import { TokenService } from './services/token.service';
       }),
     }),
   ],
-  controllers: [AuthController, DosFactoresController],
+  controllers: [AuthController, DosFactoresController, Cuenta2faController],
   providers: [
     AuthService,
     TokenService,
     IntentosService,
     CifradoTotpService,
     DosFactoresService,
+    SegundoFactorService,
+    Cuenta2faService,
     // Guards globales, en este orden: primero la sesión, luego el permiso.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermisoGuard },

@@ -769,8 +769,8 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
     (`CODIGO_INCORRECTO`, `CODIGO_REUSADO`, `SIN_CONFIGURAR`, `BLOQUEADO`). Éxito → `LOGIN_OK`
     con `detalle.metodo` (`TOTP` | `RESPALDO`, con `restantes`) o `ACTIVACION_2FA`.
   - TOTP siempre con la **hora real** (decisión 61); otplib en `seguridad/utils/totp.ts`.
-  - La 2FA opcional del dueño (activar, desactivar con clave + código, regenerar códigos) llega
-    con B7 y "restablecer 2FA" con D14 (decisión 97).
+  - La 2FA opcional del dueño (activar, desactivar con clave + código, regenerar códigos) llegó
+    con B7 (más abajo) y "restablecer 2FA" llega con D14 (decisión 97).
   - **Bloqueo temporal** (decisión 53): fallos de clave y de código suman en
     `intentos_fallidos`; con 5 seguidos, `bloqueado_hasta = ahora + 15 min`. El mensaje es
     siempre "Credenciales inválidas"; el motivo real va a la bitácora. El dueño (para sus
@@ -843,6 +843,31 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
     token nuevo, para refrescar el menú sin volver a entrar. El **menú** (`ItemMenu`:
     `codigo`, `nombre`, `route`, `icono`, `hijos?`) tiene los módulos con `ver`, agrupados, y un
     grupo sin módulos visibles no aparece.
+  - **Usuarios del negocio** (B7; módulo `usuarios`, decisión 102): `GET /api/usuarios`
+    (`?estado=ACTIVOS|INACTIVOS|TODOS`) y `GET :id` (`ver`); `POST` (`crear`) con
+    `{ idPersona | persona, usuario, claveTemporal, idRolUsuario }` (la persona nueva se crea en la
+    misma transacción; deja `debe_cambiar_clave`); `PATCH :id` (`editar`) cambia el rol y los
+    datos de contacto de la persona; `POST :id/restablecer-clave` `{ claveTemporal }` y
+    `POST :id/desbloquear` (`editar`, 204); `DELETE :id` (`eliminar`, baja lógica, 204).
+    `GET /api/personas?q=` (`usuarios.crear`, máx. 20, con `tieneUsuario`). La salida nunca lleva
+    la clave ni el secreto TOTP. **Jerarquía**: nadie actúa sobre su propia fila (409) ni sobre el
+    Dueño (409); el rol fijo no se asigna; el editor debe cubrir (tener todos los permisos de) el
+    rol actual del usuario y el rol que asigna (403 con los pares que le faltan). Un login ya
+    tomado, aquí o en otro negocio, responde igual: «Ese nombre de usuario no está disponible.»
+    (decisión 105). Eventos: `USUARIO_CREADO`, `USUARIO_ACTUALIZADO`, `USUARIO_DESACTIVADO`,
+    `CLAVE_RESTABLECIDA` (restablecer sube `version_sesion`, deja `debe_cambiar_clave` y limpia el
+    bloqueo) y `USUARIO_DESBLOQUEADO` (no sube `version_sesion`), con `detalle.actor`.
+  - **Bitácora del negocio** (B7; módulo `bitacora`, decisión 104): `GET /api/bitacora` con
+    `idUsuario`, `evento`, `desde`, `hasta` (`AAAA-MM-DD` inclusivos en `America/La_Paz`), `pagina`
+    y `tamano` (50; máx. 100) → `{ items, total, pagina, tamano }`, del más reciente al más antiguo;
+    `GET /api/bitacora/eventos`. Solo el negocio de la sesión; sin `user_agent`.
+  - **2FA del dueño con sesión** (B7, decisión 103; `@SoloAutenticado` y rol fijo en el servicio):
+    `GET /api/cuenta/2fa` → `{ activo, codigosRespaldoRestantes }`; `POST configurar` `{ clave }` →
+    `{ qr, uri, claveManual }`; `POST activar` `{ codigo }` → la sesión nueva (la versión sube) +
+    `codigosRespaldo`; `POST desactivar` y `POST codigos-respaldo` `{ clave, codigo }` (TOTP o de
+    respaldo); desactivar devuelve la sesión nueva, regenerar los 10 códigos nuevos. Un fallo
+    responde 400 y suma al bloqueo; 429 con la cuenta bloqueada; 403 al admin y a los empleados.
+    Eventos: `ACTIVACION_2FA`, `DESACTIVACION_2FA`, `CODIGOS_RESPALDO_REGENERADOS`.
 - **Sesión en el frontend** (decisión 47): token en `localStorage`; "Cerrar sesión" siempre
   visible en el header; cerrar sesión en una pestaña la cierra en todas (evento `storage`); un
   401 limpia el almacenamiento.

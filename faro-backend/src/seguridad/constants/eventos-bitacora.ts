@@ -24,6 +24,16 @@ export const EVENTOS_BITACORA = {
   VERIFICACION_2FA_FALLIDA: 'VERIFICACION_2FA_FALLIDA',
   /** Un rol cambió sus permisos: `detalle` = rol, `activados` y `desactivados`. */
   CAMBIO_PERMISOS: 'CAMBIO_PERMISOS',
+  /** La 2FA del dueño se apagó (clave + código). */
+  DESACTIVACION_2FA: 'DESACTIVACION_2FA',
+  CODIGOS_RESPALDO_REGENERADOS: 'CODIGOS_RESPALDO_REGENERADOS',
+  USUARIO_CREADO: 'USUARIO_CREADO',
+  /** `detalle`: rol anterior y nuevo si cambió el rol. */
+  USUARIO_ACTUALIZADO: 'USUARIO_ACTUALIZADO',
+  USUARIO_DESACTIVADO: 'USUARIO_DESACTIVADO',
+  /** Un tercero (dueño o plataforma) restableció la clave de `detalle.idUsuarioObjetivo`. */
+  CLAVE_RESTABLECIDA: 'CLAVE_RESTABLECIDA',
+  USUARIO_DESBLOQUEADO: 'USUARIO_DESBLOQUEADO',
   ROL_CREADO: 'ROL_CREADO',
   ROL_ACTUALIZADO: 'ROL_ACTUALIZADO',
   ROL_ELIMINADO: 'ROL_ELIMINADO',
@@ -46,6 +56,8 @@ export const MOTIVOS_2FA_FALLIDO = {
   CODIGO_REUSADO: 'CODIGO_REUSADO',
   /** Sin secreto: no se llamó a configurar. */
   SIN_CONFIGURAR: 'SIN_CONFIGURAR',
+  /** Reautenticación con sesión (B7): la clave actual no coincide. */
+  CLAVE_INCORRECTA: 'CLAVE_INCORRECTA',
 } as const;
 
 /** Largo máximo de `detalle.usuario` en un login fallido. */

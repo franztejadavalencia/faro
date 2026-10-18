@@ -32,3 +32,7 @@ export const EMISOR_TOTP = 'FARO';
 
 /** Códigos de respaldo que se entregan al activar la 2FA (decisión 50). */
 export const CANTIDAD_CODIGOS_RESPALDO = 10;
+
+/** `configurar` / `activar` con la 2FA ya activa, o un secreto que cambió (409). */
+export const MENSAJE_2FA_ACTIVA =
+  'La autenticación en dos pasos ya está activa.';

@@ -95,3 +95,55 @@ git worktree add ..\FARO-front -b feat/frontend
 ## 6. Rol de Cursor
 Editor: revisar diffs, cambios pequeños, navegar el código. Desactiva o ignora el agente de
 Cursor para no tener dos IAs editando a la vez.
+
+## 7. Retomar en una sesión nueva
+
+### Estado al cierre del 2026-10-18
+- **Hecho**: Fase 0 (A1–A6) y backend de la Fase 1 (B1, B2, B2b, B3–B7), cada una con su
+  `docs/revisiones/<ID>.md` cerrado. Decisiones hasta la **105**. Backend en Nest 11.2.7
+  (decisión 79); `npm audit --omit=dev` en 2 moderadas aceptadas (`js-yaml` de Swagger, decisión
+  70). Al cierre de B7: 339 unit y 163 e2e en verde.
+- **Sigue**: frontend de la Fase 1, **F1 a F6** (Sonnet), contra el contrato que ya está en Swagger
+  (`/api/docs`) y en `architecture.md` §11. Después, Fase 2 en el orden de `tasks.md` (D1, D2,
+  V1, …).
+- Para F1: el frontend es otra app (`faro-frontend/`), con su propio `CLAUDE.md` (decisión 73),
+  `npm audit --omit=dev` propio y la misma regla de comprobar que las pruebas cargan un paquete
+  antes de instalarlo (ESM, decisiones 86 y 94).
+
+### Mensaje inicial para el chat de revisión (claude.ai)
+> Soy el revisor del proyecto FARO (D:\FARO), mi tesis: un SaaS de rentabilidad para pequeños
+> negocios en Bolivia (NestJS + Angular). Trabajo con Claude Code en Cursor con un flujo de
+> revisión: Claude Code escribe el plan y sus preguntas en `docs/revisiones/<ID>.md` y se detiene;
+> tú lo revisas conmigo y escribes las respuestas en la sección "Respuestas" de ese archivo; luego
+> Claude Code aplica. Las reglas están en `CLAUDE.md` y `docs/GUIA-SESIONES.md` (lee la sección 7).
+> Antes de nada, lee en D:\FARO: `CLAUDE.md`, `faro-backend/CLAUDE.md`, `docs/tasks.md`,
+> `docs/decisiones.md` (las últimas 20 filas), `docs/pendientes-siap.md` y la última revisión
+> cerrada. SIAP (D:\SIAP) y CONTROLADOR (D:\CONTROLADOR) son solo referencia de lectura.
+> Cuando diga "Claude Code terminó, revisemos", lee la revisión más reciente, verifica en el
+> código lo crítico y escribe las respuestas. Al guardar en mi computadora usa cada vez una
+> ubicación nueva y verifica el contenido en el disco. Nunca escribas credenciales en archivos
+> que se commitean; los `.env.*` reales los edito yo. Cita referencias profesionales (ERP, POS,
+> normas contables, OWASP) en las decisiones. Siguiente tarea: <ID>.
+
+### Lo aprendido en la Fase 1 (para el revisor y para Claude Code)
+- **Guardar desde el chat de revisión**: escribir el archivo completo una sola vez en una carpeta
+  nueva y comparar byte a byte después de guardar. Un guardado llegó con la versión vieja.
+- **El archivo de revisión** solo se edita en la sección propia (paso 5 del flujo de `CLAUDE.md`):
+  en B2b, reemplazar "desde `## Resultado` hasta el final" borró las Respuestas.
+- **Paquetes solo ESM**: Jest 29 no los carga (`@nestjs/jwt` 12, `otplib` completo). Comprobar el
+  `exports` de un paquete y de sus dependencias antes de instalarlo.
+- **TypeORM no deja redeclarar una columna heredada** (decisión 81): por eso hay tres bases de
+  entidad.
+- **Las dudas que cambian el diseño se detienen** en "Preguntas nuevas" (como B3 con las bases):
+  mejor que aflojar una restricción para que pase un test.
+
+### Pendientes a mano (fuera de Claude Code)
+- [ ] Un commit por tarea (B2b … B7), con el mensaje del final de cada revisión; revisar antes con
+      `git status` que no entre ningún `.env.*` real.
+- [ ] Puerto 3000 ocupado por un proceso que no es tuyo: `Get-Process -Id <PID>` (Claude Code vio
+      28532) y cerrarlo si es un `node.exe` huérfano.
+- [ ] `ADMIN_CLAVE` válida en `.env.development` (8 caracteres o más) y `npm run seed:admin`;
+      luego enrolar la 2FA del admin enseguida (pendiente de despliegue en `architecture.md` §2).
+- [ ] `claude doctor` y `where.exe claude` con el instalador nativo (sección 0).
+- [ ] Respaldar fuera del repo `JWT_SECRET` y `TOTP_CLAVE_CIFRADO` de `.env.development`
+      (perder la segunda deja ilegibles los secretos TOTP).

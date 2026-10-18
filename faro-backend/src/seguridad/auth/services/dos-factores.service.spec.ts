@@ -12,6 +12,7 @@ import { AuthService } from './auth.service';
 import { CifradoTotpService } from './cifrado-totp.service';
 import { DosFactoresService } from './dos-factores.service';
 import { IntentosService } from './intentos.service';
+import { SegundoFactorService } from './segundo-factor.service';
 
 // bcrypt real tarda ~0,2 s por hash: aquí basta una función reconocible.
 jest.mock('../../utils/clave', () => ({
@@ -110,12 +111,11 @@ function armar(
   }));
   const servicio = new DosFactoresService(
     usuarios,
-    codigos,
-    dataSource,
     { respuestaSesion } as unknown as AuthService,
     intentos as unknown as IntentosService,
     cifrado,
     bitacora as unknown as BitacoraService,
+    new SegundoFactorService(usuarios, codigos, dataSource, cifrado),
   );
   const eventos = () =>
     bitacora.registrarAcceso.mock.calls.map(

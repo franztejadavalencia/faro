@@ -91,8 +91,8 @@ Backend (B) y frontend (F). Pueden avanzar en paralelo cuando haya contrato.
         omitir costos sin `ver_costos` · e2e: menú por rol; 403 sin permiso; no se puede editar
         el rol Dueño; una respuesta de prueba omite el costo sin `ver_costos` · cerrada
         2026-10-18 (decisiones 99 a 101; incluye las rutas `/api/roles` y `GET /auth/sesion`)
-- [ ] B7 · Usuarios del negocio: CRUD de empleados sobre `persona` (buscar o crear), clave
-        temporal, restablecer clave y desbloquear (dueño → empleados; admin → dueño), bitácora;
+- [x] B7 · Usuarios del negocio: CRUD de empleados sobre `persona` (buscar o crear), clave
+        temporal, restablecer clave y desbloquear (dueño → empleados; admin → dueño: ver D14), bitácora;
         **consulta de la bitácora del negocio** para el dueño (filtro por usuario, evento y
         fecha); **2FA opcional del dueño** (decisión 97), con sesión: activar (configurar +
         primer código), desactivar con clave + código y regenerar códigos de respaldo; activar y
@@ -103,7 +103,10 @@ Backend (B) y frontend (F). Pueden avanzar en paralelo cuando haya contrato.
         correcto se rechaza; el admin no puede desactivar la suya. **Anti-escalada** (decisión
         99): asignar un rol a un usuario exige que el rol del editor tenga todos los permisos del
         rol asignado, y nadie cambia su propio rol; e2e: un empleado con `usuarios.editar` no se
-        asigna ni asigna a otro un rol con más permisos que el suyo
+        asigna ni asigna a otro un rol con más permisos que el suyo · cerrada 2026-10-18
+        (decisiones 102 a 105; restablecer y desbloquear quedan como operaciones con actor en
+        `UsuarioClaveService`, la ruta del admin es de D14; la 2FA del dueño pide clave también
+        para configurar)
 - [ ] F1 · Crear `faro-frontend`: Angular CLI, Material con tema M3 de FARO, tokens `--faro-*`,
         Tailwind 4 sin preflight, Manrope, `DateFnsAdapter` `es`, ESLint, Prettier,
         `.npmrc save-exact` · `npm start` levanta una página con el tema; build y lint sin
@@ -185,7 +188,8 @@ Backend `D` (dominio) y frontend `V` (vistas) (decisión 62). Cada V va después
 - [ ] D13 · Dashboard (backend): evolución mensual de ventas, MC y utilidad, mes contra mes,
         marca del cambio de régimen · e2e con 3 meses cerrados
 - [ ] D14 · Admin de plataforma: listar negocios, activar y suspender, restablecer clave y
-        desbloquear al dueño, **restablecer la 2FA del dueño** (decisión 97: `totp_activo =
+        desbloquear al dueño (con `UsuarioClaveService` de B7 y un actor `PLATAFORMA`; el evento
+        va a la bitácora **del negocio del dueño**, no a la de plataforma), **restablecer la 2FA del dueño** (decisión 97: `totp_activo =
         false`, sin secreto ni códigos, `version_sesion + 1`, bitácora), **consulta de la
         bitácora de plataforma**, sin acceso a datos comerciales · e2e: el admin no entra a rutas
         de negocio; un negocio suspendido no entra; la bitácora de plataforma no expone datos

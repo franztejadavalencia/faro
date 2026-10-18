@@ -146,3 +146,27 @@ Swagger: `http://localhost:3000/api/docs`. Salud: `GET /api/salud`.
   (`TABLAS_DE_CATALOGO`) y repone el rol de plataforma. Para un usuario con permisos exactos,
   ver `conPermisos` en `test/permisos.e2e-spec.ts`.
 - Un alias nuevo de `tsconfig.json` se escribe con `./src/...` (sin `baseUrl`, decisión 101).
+
+## Usuarios, bitácora y 2FA del dueño (B7)
+- Contrato y reglas: `architecture.md` §11 (decisiones 102 a 105). Usuarios en
+  `seguridad/usuario/`, personas en `seguridad/persona/`.
+- **Quien actúa sobre otro usuario cubre su rol** (`paresFaltantes`, `usuario/utils/jerarquia.ts`):
+  el rol actual del objetivo y el rol que se asigna. Nadie toca su propia fila ni al Dueño, y el
+  rol fijo no se asigna. Toda ruta nueva que cambie el rol, la clave o el estado de otro usuario
+  pasa por esta regla; `UsuarioService.objetivoGestionable` / `rolAsignable` son el punto único.
+- **Restablecer y desbloquear** son `UsuarioClaveService` (operaciones con el actor, `UPDATE`
+  explícito con `usuario_modificacion`): D14 las reusa desde plataforma. Un evento de plataforma
+  sobre un usuario de un negocio debe quedar en la bitácora **de ese negocio** (hoy `registrar` usa
+  el negocio del contexto: D14 agrega la variante que lo recibe).
+- Una persona o un usuario se leen con `NegocioRepository`; una referencia de otro negocio
+  (`idPersona`, `idRolUsuario`) responde 404. La salida de usuarios es un DTO explícito: nunca la
+  clave ni el secreto TOTP. El login repetido responde siempre el mismo mensaje (decisión 105).
+- **Bitácora**: `BitacoraService.consultar` toma el negocio del contexto (403 sin él) y es el
+  único camino de lectura; paginación común en `common/dto/paginacion.dto.ts`. Un evento nuevo se
+  agrega a `EVENTOS_BITACORA` (alimenta `GET /api/bitacora/eventos`).
+- **2FA con sesión** (`Cuenta2faService`, `/api/cuenta/2fa`): solo el Dueño; tocar el segundo factor
+  pide clave (configurar) o clave y código (desactivar, regenerar); un fallo responde 400 y suma al
+  bloqueo. Lo que comparte con el login vive en `SegundoFactorService`.
+- E2E: `test/utils/roles-de-prueba.ts` (`crearRolConPermisos`, `crearUsuarioConPermisos`) arma un
+  usuario con permisos exactos; las filas de bitácora con fecha fija se insertan directo con horas
+  locales (`-04`) para probar `desde`/`hasta`.
