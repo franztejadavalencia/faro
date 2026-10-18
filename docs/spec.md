@@ -104,7 +104,7 @@ de §6; **C** = versión completa.
 ### 4.1 Plataforma
 | Caso de uso | Nivel |
 |---|---|
-| Registro autoservicio: el dueño crea su cuenta y su negocio (nombre, NIT opcional, método de valuación, régimen tributario inicial, inventario inicial) | P |
+| Registro autoservicio: el dueño crea su cuenta y su negocio (nombre, NIT opcional, método de valuación, régimen tributario inicial, **fecha de inicio**, inventario inicial). La fecha de inicio es el día 1 de un mes entre 12 meses atrás y el actual y no se puede cambiar después: el primer mes, el régimen inicial y el inventario inicial llevan esa fecha, así el negocio puede cargar los meses que ya vivió | P |
 | Admin lista negocios, ve su estado y los activa o suspende | P |
 | Admin define planes (límites: sucursales, usuarios, productos) | P+ |
 | Dueño elige un plan, paga por QR bancario y sube el comprobante | P+ |
@@ -144,7 +144,7 @@ de §6; **C** = versión completa.
 | Caso de uso | Nivel |
 |---|---|
 | Registrar una compra: proveedor, fecha, con o sin factura, medio de pago (efectivo o banco), detalle de productos, cantidad y costo unitario | P |
-| Anular una compra con motivo (solo en mes abierto y si el stock lo permite) | P |
+| Anular una compra con motivo (solo en mes abierto y si no hubo salidas de esos productos en la sucursal después de ella, §5.2) | P |
 | Ajuste de inventario con motivo | P |
 | Kardex por producto: movimientos, saldo y costo | P |
 | Stock actual valorado, con aviso de stock bajo el mínimo | P |
@@ -238,8 +238,26 @@ un catálogo (se podrán agregar otros, como RAU o STI, en la versión completa)
   (stock + cant). Cada venta sale al costo_prom vigente.
 - **PEPS**: cada compra crea un lote (cantidad, costo). Las ventas consumen los lotes más
   antiguos primero; una venta puede tomar varios lotes.
-- El inventario inicial entra como la primera compra (PPP) o el primer lote (PEPS).
-- Las anulaciones revierten el movimiento con el mismo costo con el que se registró.
+- El inventario inicial entra como la primera compra (PPP) o el primer lote (PEPS), con la fecha
+  de inicio del negocio (§4.1).
+- El costo se calcula y se guarda **al registrar** el documento; no se recalcula después.
+- **Orden de fechas**: un documento que mueve stock no puede tener fecha anterior al último
+  movimiento de cualquiera de sus productos en la sucursal (el mismo día sí se permite; dentro
+  del día manda el orden de registro). Así el costo guardado siempre es correcto y el stock
+  disponible es el stock actual. Los gastos no tienen esta regla porque no mueven stock.
+  Mensaje: "El producto X ya tiene movimientos con fecha 12/10/2026; registre esta operación
+  con esa fecha o una posterior".
+- Las anulaciones revierten el movimiento con el mismo costo con el que se registró (en PEPS,
+  sobre los lotes exactos).
+- **Fecha de una anulación**: la más temprana que respete el orden de fechas, es decir la
+  fecha del original o, si alguno de sus productos ya se movió después, la de ese último
+  movimiento. Tiene que caer en el mismo mes que el original; si no, la anulación se rechaza
+  con un mensaje que explica por qué y que el error se corrige con un ajuste de inventario
+  (§7). Un gasto se anula con su misma fecha.
+- **Anular una entrada** (compra, ajuste positivo, inventario inicial) solo se puede si no hubo
+  salidas de esos productos en la sucursal después de ella (en PEPS: el lote no se consumió).
+  Si no, en PPP podría quedar valor negativo con stock 0. Anular una salida (venta, ajuste
+  negativo) siempre se puede.
 
 ### 5.3 Por producto *i* en el mes
 - VN_i = Σ venta neta de sus ventas no anuladas
@@ -322,7 +340,7 @@ medio de pago. En una venta o compra con varios productos hay una línea *[p]* p
 | Gasto sin factura, o Simplificado | Gasto de la categoría 100 | Caja/Bancos 100 |
 | Ajuste negativo (merma) | Pérdidas de inventario [p] | Inventario [p] |
 | Ajuste positivo (sobrante) | Inventario [p] | Sobrantes de inventario [p] |
-| Anulación de cualquiera | Asiento inverso del original, con la misma fecha y referencia al original | |
+| Anulación de cualquiera | Asiento inverso del original, con la fecha de la anulación (§5.2: la del original salvo que el orden de fechas obligue a una posterior, siempre en el mismo mes) y referencia al original | |
 
 Reglas:
 - Los asientos **nunca se borran ni se editan**: una corrección es un asiento inverso.
@@ -381,6 +399,11 @@ crédito), activos fijos y depreciación.
 - El régimen tributario se aplica a todo el negocio, no a cada venta (§5.1).
 - Todas las compras, ventas y gastos son al contado (caja o banco).
 - El mes es el mes calendario; solo se puede reabrir el último mes cerrado.
+
+**Limitación conocida de la preliminar**:
+- Un error de un mes anterior que ya no se puede anular (§5.2) se corrige con un **ajuste de
+  inventario** en el mes en curso. El ajuste corrige la cantidad y el costo, pero **no la venta
+  neta del mes original**. Eso lo resuelven las devoluciones de la versión completa (§5.9).
 
 **Preguntas cerradas** (2026-10-17):
 1. Ventas con y sin factura → régimen por negocio con historial; en el General se factura todo.

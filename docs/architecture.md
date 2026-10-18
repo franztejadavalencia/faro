@@ -311,7 +311,9 @@ erDiagram
 ### Plataforma
 - `negocio`: nombre, NIT opcional, `estado` (`ACTIVO`, `SUSPENDIDO`), `metodo_valuacion`
   (`PPP` | `PEPS`, fijo: no hay endpoint que lo cambie), `criterio_prorrateo`
-  (`PORCENTAJE_VENTAS` | `UNIDADES` | `MANUAL_LINEA`).
+  (`PORCENTAJE_VENTAS` | `UNIDADES` | `MANUAL_LINEA`), `fecha_inicio` (decisión 59: día 1 de
+  un mes entre 12 meses atrás y el actual, `CHECK (extract(day from fecha_inicio) = 1)`; fija:
+  no hay endpoint que la cambie).
 - `sucursal`: cada negocio tiene al menos la principal (`es_principal`).
 - `regimen_tributario`: catálogo global (sin `id_negocio`) con `codigo` (`GENERAL`,
   `SIMPLIFICADO`), `factura`, `tasa_iva`, `tasa_it` (`numeric(5,4)`).
@@ -321,12 +323,14 @@ erDiagram
   `fecha_desde <= fecha`.
 - `periodo (id_negocio, anio, mes, estado)`: `ABIERTO` | `CERRADO`, con fecha y usuario de
   cierre y de reapertura y motivo de reapertura. Único `(id_negocio, anio, mes)`. Reglas
-  (decisión 39):
-  - **Se crea a demanda.** El registro del negocio crea el del mes actual. Después, el primer
-    documento con fecha de un mes nuevo lo crea `ABIERTO`
+  (decisiones 39 y 59):
+  - **Se crea a demanda.** El registro del negocio crea el del mes de `fecha_inicio`. Después,
+    el primer documento con fecha de un mes nuevo lo crea `ABIERTO`
     (`INSERT … ON CONFLICT (id_negocio, anio, mes) DO NOTHING`) y luego lo bloquea como en §9.
-  - **Fechas válidas de un documento**: no antes del primer periodo del negocio, no en un periodo
-    `CERRADO` y no posteriores a hoy. Si no, 400 con mensaje en español.
+  - **Fechas válidas de un documento**: no antes de `fecha_inicio` (el primer periodo), no en un
+    periodo `CERRADO` y no posteriores a hoy según `Reloj` (§13, decisión 61; nunca
+    `CURRENT_DATE` en SQL). Si mueve stock, además la regla de orden de §7 Inventario. Si no,
+    400 con mensaje en español.
   - **Se cierra en orden**: cerrar un mes exige que el anterior, si existe, esté `CERRADO`.
   - **Solo se reabre el último mes cerrado** (spec §4.9), con motivo. Al reabrir se borra la foto
     `resultado_mensual_producto` de ese periodo; se regenera al volver a cerrar.
@@ -388,8 +392,27 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
 - `con_factura` (compra y gasto) y `medio_pago` (`EFECTIVO` | `BANCO`/`QR`).
 
 ### Inventario
-- `existencia (id_producto, id_sucursal, cantidad, costo_promedio, valor)`: el saldo actual.
-  Única por `(id_producto, id_sucursal)`. Se bloquea al registrar (§9).
+- `existencia (id_producto, id_sucursal, cantidad, costo_promedio, valor,
+  fecha_ultimo_movimiento)`: el saldo actual. Única por `(id_producto, id_sucursal)`. Se
+  bloquea al registrar (§9).
+- **Orden de fechas** (decisión 54, spec §5.2): un documento que mueve stock exige
+  `fecha ≥ existencia.fecha_ultimo_movimiento` de cada uno de sus productos en la sucursal; el
+  mismo día se permite y dentro del día manda el orden de registro (`id`). Se valida en el paso 2
+  de §9, con la fila ya bloqueada, así que no agrega bloqueos. Con esta regla el saldo guardado
+  en cada fila del kardex siempre es correcto y el disponible es `existencia.cantidad` (no se
+  porta `disponibleAlDia` de SIAP). Los gastos no tienen regla de orden.
+- **Valuación** (decisión 58): el costo se persiste al registrar. Funciones puras en
+  `inventario/utils/valuacion.ts` (`entradaPPP`, `salidaPPP`, `entradaPEPS`,
+  `consumirLotesPEPS`, `reponerLotesPEPS`), con `Decimal` y la regla de redondeo de §5;
+  `consumirLotesPEPS` devuelve las asignaciones salida → lote (cantidad y costo) que alimentan
+  el kardex por lote consumido. Sin recálculo al vuelo como `calcularFifo` de SIAP.
+- **Anulación** (decisiones 55 y 56, spec §5.2):
+  - Fecha: `max(fecha original, fecha_ultimo_movimiento de sus productos)`; si cae en otro mes
+    que el original, 400 con un mensaje que explica por qué y que se corrige con un ajuste de
+    inventario. Esa misma fecha llevan el kardex de la anulación y el asiento inverso.
+  - Una entrada (compra, ajuste positivo, `INICIAL`) solo se anula si no hay salidas de esos
+    productos en la sucursal posteriores a ella (en PEPS: `cantidad_saldo = cantidad_inicial`
+    en sus lotes). Una salida siempre se puede anular.
 - `lote` (solo PEPS): documento de origen, fecha, `cantidad_inicial`, `costo_unitario`,
   `cantidad_saldo`, `valor_saldo`.
 - `kardex_movimiento`: una fila por movimiento **y por lote consumido**, con tipo (entrada o
@@ -466,9 +489,11 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
 
   Si algo falla, lanza error y la transacción revierte todo, documento incluido. Un descuadre
   lanza `AsientoDescuadradoError` (→ 500, §10).
-- **`AsientoService.revertir(manager, idAsiento, glosa)`** arma el asiento inverso (debe ↔
-  haber) con `tipo = REVERSION`, la **misma fecha** que el original, el mismo documento e
-  `id_asiento_revertido`. El periodo de esa fecha debe estar abierto.
+- **`AsientoService.revertir(manager, idAsiento, fecha, glosa)`** arma el asiento inverso
+  (debe ↔ haber) con `tipo = REVERSION`, el mismo documento e `id_asiento_revertido`. La
+  `fecha` es la de la anulación (§7 Inventario, decisión 55): la del original salvo que el orden
+  de fechas obligue a una posterior, y siempre en el mismo mes que el original (si no, lanza
+  error). Para un gasto es la del original. El periodo de esa fecha debe estar abierto.
 - **Control de cuadre (spec §5.10)**: consultas SQL en `contabilidad/services/cuadre.service.ts`
   que reciben `idNegocio` y periodo. Las usan el cierre de mes (si no cuadra, no cierra) y la
   vista de contabilidad.
@@ -486,12 +511,15 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
      (`pessimistic_write`); el cierre bloquea también el periodo anterior para verificar que esté
      cerrado.
   2. Bloquear las `existencia` involucradas con `pessimistic_write`, **ordenadas por
-     `id_producto`**.
+     `id_producto`**, y validar la regla de orden de fechas (§7 Inventario) y el stock.
   3. Tomar el correlativo del documento (`pessimistic_write`) y guardar el documento.
   4. Registrar el kardex (y lotes en PEPS) y actualizar `existencia`.
   5. Registrar el asiento (que toma su propio correlativo).
-- Anular = mismos pasos: marcar anulado (`anularRegistro(manager, …)`), revertir el kardex con
-  los mismos costos y `AsientoService.revertir()`.
+- Anular = mismos pasos: calcular la fecha de la anulación con las `existencia` ya bloqueadas
+  (§7 Inventario, decisión 55) y asegurar su periodo, marcar anulado
+  (`anularRegistro(manager, …)`), revertir el kardex con los mismos costos y con esa fecha, y
+  `AsientoService.revertir()` con la misma fecha. `fecha_anulacion` es la hora real del
+  servidor (dato técnico, §13), distinta de la fecha de negocio de la anulación.
 
 ## 10. Manejo de errores
 
@@ -574,12 +602,13 @@ Todas las cabeceras heredan de `BaseAnulableEntity` y guardan:
   401 limpia el almacenamiento.
 - **IP del cliente** (bitácora): `request.ip`. Solo con `TRUST_PROXY` configurado (detrás de un
   proxy confiable) se habilita `trust proxy` y se leen `x-forwarded-for` / `x-real-ip`.
-- `POST /api/registro` (público) crea en **una sola transacción**: el negocio y su sucursal
-  principal, el régimen inicial (`negocio_regimen` desde el día 1 del mes actual), el plan de
-  cuentas semilla con las categorías de gasto por defecto y sus subcuentas 5.2.1.xx (§7), los
-  roles Dueño (fijo) y Empleado con sus permisos, la `persona` y el usuario del dueño (su
-  correo como `usuario`), los correlativos y el primer periodo (mes actual, abierto). El inventario inicial se carga después
-  como ajuste `INICIAL`.
+- `POST /api/registro` (público) crea en **una sola transacción**: el negocio (con `fecha_inicio`,
+  decisión 59) y su sucursal principal, el régimen inicial (`negocio_regimen` desde
+  `fecha_inicio`), el plan de cuentas semilla con las categorías de gasto por defecto y sus
+  subcuentas 5.2.1.xx (§7), los roles Dueño (fijo) y Empleado con sus permisos, la `persona` y
+  el usuario del dueño (su correo como `usuario`), los correlativos y el primer periodo (mes de
+  `fecha_inicio`, abierto). El inventario inicial se carga después como ajuste `INICIAL` con
+  fecha `fecha_inicio`.
 
 ## 12. Tema Material 3 + Tailwind (decisiones 5 y 23)
 
@@ -608,11 +637,44 @@ Paleta **definitiva** (decisión 23, mockup aprobado en A6):
 - **Backend unit (Jest)**: constructores de asientos (filas de spec §5.9), PPP y PEPS
   (incluida la secuencia que termina en stock 0 y valor 0,00, §5), prorrateo (spec §5.4),
   `math.utils` y el transformer de `Decimal`.
+  - **Test de propiedades con semilla fija** para `valuacion.ts` (decisión 58, idea del LCG de
+    `fifo.util.spec.ts` de SIAP): cientos de secuencias aleatorias válidas de entradas y salidas
+    que terminan en stock 0 con valor 0,00 y Σ salidas = Σ entradas.
 - **Backend e2e (Jest + supertest) sobre `faro_test`**: aislamiento por negocio (§6), login,
   venta con su asiento y anulación con su asiento inverso, rechazo de registro en mes cerrado.
   `.env.test`; la base se migra al iniciar y se limpia con `TRUNCATE … CASCADE` entre suites.
 - **Frontend**: Karma/Jasmine, como SIAP (pipe `moneda`, guards, servicios de sesión).
 - Al cerrar cada tarea: tests y lint en verde.
+
+### Reloj inyectable (decisión 61)
+- `Reloj` en `common/` con `ahora()` y `hoy()` (en `ZONA_HORARIA`) reemplaza toda lectura
+  directa de la hora del sistema para **fechas de negocio**: "no posterior a hoy", el periodo de
+  un documento nuevo y la fecha por defecto de los documentos. `fechaHoy()` de SIAP pasa a
+  usarlo. Nunca `CURRENT_DATE` en SQL para reglas de negocio.
+- Por defecto es el reloj del sistema. `RelojFijo` (fijar y avanzar, como `FakeTimeProvider`
+  de .NET) se usa en los tests y en el seed de demostración. El proveedor se elige **por
+  código**, no por variable de entorno: en producción no hay forma de fijarlo.
+- **Fechas técnicas y de seguridad con la hora real**: `fecha_registro`, `fecha_anulacion`,
+  bitácora, vigencia del JWT, bloqueo temporal y ventana TOTP. Por eso un documento de la demo
+  con `fecha` 15 de mayo tiene `fecha_registro` de hoy: `fecha` es el hecho y `fecha_registro`
+  es cuándo se cargó. El e2e del bloqueo temporal escribe `bloqueado_hasta` en el pasado
+  directamente en `faro_test`.
+
+### Seed de demostración (decisión 60)
+- `npm run seed:demo` (en `src/database/seeds`): solo con `NODE_ENV=development`, sobre
+  `faro_dev`, y se niega si el negocio demo ya existe.
+- Usa los **servicios reales** en proceso (registro, compras, POS, gastos, ajustes, cierre); no
+  escribe filas a mano. Así también es prueba de integración.
+- Recorre **7 meses** en orden, día por día, con `RelojFijo` en ese día, y cierra cada mes
+  (6 cerrados + el actual abierto). El cierre verifica el cuadre, así que una demo que termina
+  bien prueba que todo cuadra.
+- Datos deterministas (generador con semilla fija) con las historias del mockup de A6: la leche
+  se vende mucho y pierde (MC > 0, UN < 0), el azúcar se vende bajo costo, el aceite queda bajo
+  el stock mínimo, un producto sin rotación, mermas y el cambio de Simplificado a General a
+  mitad de la serie.
+- Usuarios demo: dueño con 2FA desactivada y admin de plataforma **sin 2FA configurada** (el
+  enrolamiento se muestra en vivo en la defensa). Claves desde `.env.development`
+  (`DEMO_CLAVE`); nunca un secreto TOTP en `.env` ni claves en el código.
 
 ## 14. Diferencias con SIAP
 
